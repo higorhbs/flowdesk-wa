@@ -324,7 +324,7 @@ export class WhatsAppClient extends EventEmitter {
   }
 
   isConnected(): boolean {
-    return this.status === "open" && socketIsOpen(this.sock);
+    return this.status === "open" && !!this.sock;
   }
 
   getDebugInfo() {

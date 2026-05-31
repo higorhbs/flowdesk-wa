@@ -11,7 +11,7 @@ import {
 import { requireAuth } from "../middleware/auth";
 import type { WhatsAppClient } from "@flowdesk/whatsapp-client";
 import { isWhatsAppRuntime, waManager } from "../wa-manager.js";
-import { ensureWhatsAppClient, resolveWhatsAppClient } from "../wa-lifecycle.js";
+import { ensureWhatsAppClient, hasStoredSession, resolveWhatsAppClient } from "../wa-lifecycle.js";
 
 type ConnectResult = {
   status: string;
@@ -161,7 +161,21 @@ export async function whatsappRoutes(app: FastifyInstance) {
         req.log.error({ err }, "whatsapp reconnect failed");
       });
     }
-    const connected = client?.isConnected() ?? false;
+    if (
+      client &&
+      !client.isConnected() &&
+      (client.status === "connecting" || hasStoredSession(sessionsRoot, id))
+    ) {
+      const deadline = Date.now() + 4000;
+      while (Date.now() < deadline) {
+        if (client.isConnected()) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    let connected = client?.isConnected() ?? false;
+    if (!connected && business.isConnected && hasStoredSession(sessionsRoot, id)) {
+      connected = true;
+    }
     if (connected !== business.isConnected) {
       await setBusinessConnected(id, connected);
     }
