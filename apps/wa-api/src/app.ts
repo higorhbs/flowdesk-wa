@@ -29,7 +29,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     credentials: true,
   });
 
-  app.get("/health", () => ({ ok: true, ts: new Date().toISOString() }));
+  app.get("/health", () => ({
+    ok: true,
+    ts: new Date().toISOString(),
+    publicUrl: process.env.WA_API_PUBLIC_URL?.trim() || null,
+  }));
   app.get("/health/whatsapp", async () => {
     const { waManager } = await import("./wa-manager.js");
     const sessionsRoot = process.env.WA_SESSION_PATH?.trim() ?? "";

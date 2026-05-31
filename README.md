@@ -37,7 +37,9 @@ docker compose up -d --build
 Configure no `.env.production` do web:
 
 ```
-NEXT_PUBLIC_WA_API_URL=https://seu-pi.duckdns.org
+NEXT_PUBLIC_WA_API_URL=http://zapflow.duckdns.org:3001
 ```
+
+DuckDNS (`zapflow.duckdns.org`) aponta para o IP público da VM. Libere a porta **3001** no firewall Oracle antes do `docker compose up`.
 
 O dashboard usa Firestore direto; só WhatsApp aponta para este serviço.
