@@ -69,7 +69,7 @@ async function deliverBotReplies(businessId: string, client: WhatsAppClient, msg
 
 async function enqueueInbound(businessId: string, msg: WhatsAppMessage) {
   const queue = getMessageQueue();
-  const jobId = msg.messageId ? `${businessId}:${msg.messageId}` : undefined;
+  const jobId = msg.messageId ? `${businessId}_${msg.messageId}` : undefined;
   await queue.add(
     "inbound",
     {

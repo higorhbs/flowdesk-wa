@@ -97,16 +97,21 @@ async function connectForQr(
     return { status: "qr", qr: client.lastQrDataUrl };
   }
 
-  if (client.status === "close" || client.status === "connecting") {
-    if (client.status === "close") {
-      void client.connect().catch((err) => {
-        log.error({ err }, "whatsapp connect failed");
-      });
-    }
+  try {
+    await client.kickPairing();
+  } catch (err) {
+    log.error({ err }, "whatsapp kickPairing failed");
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Falha ao iniciar sessão WhatsApp",
+    };
   }
 
-  const result = await waitForQr(client, 12_000);
+  const result = await waitForQr(client, 22_000);
   if (result.qr || client.isConnected()) return result;
+  if (client.lastQrDataUrl) {
+    return { status: "qr", qr: client.lastQrDataUrl };
+  }
 
   return {
     status: "connecting",
@@ -156,19 +161,17 @@ export async function whatsappRoutes(app: FastifyInstance) {
     if (!client) {
       client = ensureWhatsAppClient(waManager, sessionsRoot, id);
     }
-    if (client && !client.isConnected() && client.status === "close") {
-      void client.connect().catch((err) => {
-        req.log.error({ err }, "whatsapp reconnect failed");
-      });
+    if (client && !client.isConnected() && !client.lastQrDataUrl) {
+      try {
+        await client.kickPairing();
+      } catch (err) {
+        req.log.error({ err }, "whatsapp status kickPairing failed");
+      }
     }
-    if (
-      client &&
-      !client.isConnected() &&
-      (client.status === "connecting" || hasStoredSession(sessionsRoot, id))
-    ) {
-      const deadline = Date.now() + 4000;
+    if (client && !client.isConnected()) {
+      const deadline = Date.now() + 8000;
       while (Date.now() < deadline) {
-        if (client.isConnected()) break;
+        if (client.isConnected() || client.lastQrDataUrl) break;
         await new Promise((r) => setTimeout(r, 250));
       }
     }

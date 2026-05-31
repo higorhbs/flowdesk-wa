@@ -247,6 +247,35 @@ export class WhatsAppClient extends EventEmitter {
     });
   }
 
+  async kickPairing(): Promise<void> {
+    if (this.isConnected() || this.lastQrDataUrl) return;
+
+    if (this.connecting) {
+      await new Promise((r) => setTimeout(r, 2500));
+      if (this.isConnected() || this.lastQrDataUrl) return;
+    }
+
+    const stale =
+      !this.isConnected() &&
+      !this.lastQrDataUrl &&
+      (this.status === "connecting" || this.connecting);
+
+    if (this.status !== "close" && !stale) return;
+
+    this.connecting = false;
+    if (this.sock) {
+      try {
+        this.sock.end(undefined);
+      } catch {
+        /* ignore */
+      }
+      this.sock = null;
+      this.boundSock = null;
+      this.status = "close";
+    }
+    await this.connect();
+  }
+
   async connect() {
     if (this.isConnected()) return;
     if (this.connecting) return;
@@ -284,6 +313,7 @@ export class WhatsAppClient extends EventEmitter {
         generateHighQualityLinkPreview: false,
         markOnlineOnConnect: false,
         shouldSyncHistoryMessage: () => false,
+        defaultQueryTimeoutMs: 60_000,
         msgRetryCounterCache: this.msgRetryCounterCache as any,
         getMessage: async (key) => this.messageStore.get(messageStoreKey(key)),
       });
