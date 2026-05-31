@@ -1,0 +1,19 @@
+{
+  "name": "flowdesk-wa",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "dev": "pnpm --filter @flowdesk/wa-api dev",
+    "build": "pnpm --filter @flowdesk/wa-api build",
+    "start": "pnpm --filter @flowdesk/wa-api start"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "overrides": {
+      "firebase": "^11.6.0"
+    }
+  }
+}
