@@ -1,4 +1,4 @@
-export const APP_DISPLAY_NAME = "FlowDesk";
+export const APP_DISPLAY_NAME = "FlowDesk IA";
 
 export const APP_PAGE_TITLE = `${APP_DISPLAY_NAME} — Atendimento automático no WhatsApp`;
 

@@ -175,6 +175,8 @@ export interface ScheduledStatus {
   status: ScheduledStatusState;
   error?: string;
   publishedAt?: string;
+  seriesId?: string;
+  sourceStatusId?: string;
   createdAt: string;
   updatedAt: string;
 }

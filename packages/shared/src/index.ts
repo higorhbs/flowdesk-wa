@@ -232,13 +232,23 @@ export function renderTemplate(template: string, vars: Record<string, string>): 
 // ─── Planos ───────────────────────────────────────────────────────────────────
 
 export const PLAN_LIMITS = {
-  STARTER: { phones: 1, messagesPerMonth: 500, catalogItems: 3, appointmentsPerMonth: 30 },
-  PRO: { phones: 3, messagesPerMonth: 5000, catalogItems: 100, appointmentsPerMonth: 500 },
+  STARTER: {
+    messagesPerMonth: 500,
+    catalogItems: 3,
+    appointmentsPerMonth: 30,
+    scheduledStoriesPerMonth: 2,
+  },
+  PRO: {
+    messagesPerMonth: 5000,
+    catalogItems: 100,
+    appointmentsPerMonth: 500,
+    scheduledStoriesPerMonth: 10,
+  },
   UNLIMITED: {
-    phones: 10,
     messagesPerMonth: Infinity,
     catalogItems: Infinity,
     appointmentsPerMonth: Infinity,
+    scheduledStoriesPerMonth: Infinity,
   },
 } as const;
 
@@ -251,18 +261,57 @@ export function formatPlanLimit(value: number): string {
 
 export function planMarketingFeatures(plan: PlanTier): string[] {
   const l = PLAN_LIMITS[plan];
+  const stories =
+    l.scheduledStoriesPerMonth === Infinity
+      ? "Stories ilimitados"
+      : `${formatPlanLimit(l.scheduledStoriesPerMonth)} publicações de stories/mês`;
   return [
-    `${l.phones} número${l.phones > 1 ? "s" : ""} WhatsApp`,
     l.messagesPerMonth === Infinity
       ? "Mensagens ilimitadas"
       : `${formatPlanLimit(l.messagesPerMonth)} mensagens/mês`,
     `${formatPlanLimit(l.catalogItems)} itens no catálogo`,
     `${formatPlanLimit(l.appointmentsPerMonth)} agendamentos/mês`,
+    stories,
   ];
 }
 
+export type ScheduledStoryQuotaRow = {
+  scheduledAt: string;
+  status: string;
+};
+
+export function countScheduledStoriesInMonth(
+  rows: ScheduledStoryQuotaRow[],
+  ref = new Date()
+): number {
+  const y = ref.getFullYear();
+  const m = ref.getMonth();
+  return rows.filter((row) => {
+    if (row.status === "cancelled") return false;
+    const d = new Date(row.scheduledAt);
+    return d.getFullYear() === y && d.getMonth() === m;
+  }).length;
+}
+
+export function assertScheduledStoriesQuota(
+  plan: PlanTier,
+  currentMonthCount: number,
+  adding: number
+): void {
+  const limit = PLAN_LIMITS[plan].scheduledStoriesPerMonth;
+  if (!Number.isFinite(limit)) return;
+  if (currentMonthCount + adding > limit) {
+    const left = Math.max(0, limit - currentMonthCount);
+    throw new Error(
+      left === 0
+        ? `Seu plano permite ${limit} publicações de stories por mês e você já atingiu o limite.`
+        : `Seu plano permite ${limit} publicações de stories por mês. Você pode agendar mais ${left} neste mês.`
+    );
+  }
+}
+
 export const PLAN_PRICES = {
-  STARTER: { brl: 9.99, label: "Starter" },
+  STARTER: { brl: 69.9, label: "Starter" },
   PRO: { brl: 99, label: "Pro" },
   UNLIMITED: { brl: 199, label: "Unlimited" },
 } as const;

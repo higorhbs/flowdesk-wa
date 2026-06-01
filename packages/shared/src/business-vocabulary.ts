@@ -121,18 +121,12 @@ const BY_TYPE: Record<BusinessType, BusinessVocabulary> = {
   BARBERSHOP: {
     ...DEFAULT,
     typeLabel: "Barbearia",
-    catalogPageTitle: "Catálogo de serviços",
-    catalogPageSubtitle: "Cortes, barba e combos exibidos no WhatsApp",
     catalogItemSingular: "serviço",
-    catalogEmptyHint: "Adicione cortes e serviços para a IA enviar no WhatsApp.",
   },
   SALON: {
     ...DEFAULT,
     typeLabel: "Salão / Manicure",
-    catalogPageTitle: "Catálogo de serviços",
-    catalogPageSubtitle: "Serviços exibidos quando a cliente pede valores ou opções",
     catalogItemSingular: "serviço",
-    catalogEmptyHint: "Adicione serviços do salão para a IA enviar no WhatsApp.",
   },
   RESTAURANT: {
     ...DEFAULT,

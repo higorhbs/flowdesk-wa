@@ -40,6 +40,18 @@ Configure no `.env.production` do web:
 NEXT_PUBLIC_WA_API_URL=http://zapflow.duckdns.org:3001
 ```
 
-DuckDNS (`zapflow.duckdns.org`) aponta para o IP público da VM. Libere a porta **3001** no firewall Oracle antes do `docker compose up`.
+DuckDNS (`zapflow.duckdns.org`) aponta para o IP público da VM Oracle (`163.176.132.231`). Na VM o clone fica em `~/flowdesk-wa`.
+
+```bash
+# No Mac (chave em Documents)
+ssh -i ~/Documents/ssh-key-2026-05-28.key ubuntu@163.176.132.231
+cd ~/flowdesk-wa
+```
+
+Produção com HTTPS: `docker compose -f docker-compose.https.yml up -d --build`
+
+Inclua `https://flowdesk.ia.br` em `CORS_ORIGIN` se o painel estiver nesse domínio.
+
+**Checkout Stripe (planos)** não roda neste repo — use a API do monorepo **FlowDesk** (`~/FlowDesk` + `scripts/oracle/deploy-api.sh`) ou `NEXT_PUBLIC_API_URL=https://SEU-PROJETO.web.app/api` (Firebase Functions).
 
 O dashboard usa Firestore direto; só WhatsApp aponta para este serviço.
