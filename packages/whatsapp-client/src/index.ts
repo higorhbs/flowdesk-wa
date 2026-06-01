@@ -223,8 +223,10 @@ export class WhatsAppClient extends EventEmitter {
         this.connecting = false;
         this.boundSock = null;
         const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
-        const shouldReconnect = code !== DisconnectReason.loggedOut;
+        const loggedOut = code === DisconnectReason.loggedOut;
+        const shouldReconnect = !loggedOut;
         console.log(`[wa:${this.businessId}] disconnected code=${code ?? "-"} reconnect=${shouldReconnect}`);
+        if (loggedOut) this.clearSessionFiles();
         this.emit("disconnected", { code, shouldReconnect });
         if (shouldReconnect) {
           setTimeout(() => {
@@ -245,6 +247,20 @@ export class WhatsAppClient extends EventEmitter {
         this.tryEmitInbound({ key, message: update.message, messageTimestamp: Date.now() / 1000 });
       }
     });
+  }
+
+  private clearSessionFiles() {
+    this.sock = null;
+    this.boundSock = null;
+    this.status = "close";
+    this.connecting = false;
+    this.lastQrDataUrl = undefined;
+    this.messageStore.clear();
+    this.lidToPhone.clear();
+    if (fs.existsSync(this.sessionPath)) {
+      fs.rmSync(this.sessionPath, { recursive: true, force: true });
+    }
+    fs.mkdirSync(this.sessionPath, { recursive: true });
   }
 
   async kickPairing(): Promise<void> {
@@ -343,14 +359,38 @@ export class WhatsAppClient extends EventEmitter {
     return result?.key.id ?? undefined;
   }
 
+  async publishStatus(opts: {
+    mediaUrl: string;
+    mediaType: "image" | "video";
+    caption?: string;
+    statusJidList: string[];
+  }): Promise<string | undefined> {
+    if (!this.sock) throw new Error("Socket not connected");
+    const statusJidList = opts.statusJidList
+      .map((j) => (j.includes("@") ? jidNormalizedUser(j) || j : toSendJid(j)))
+      .filter((j) => j.endsWith("@s.whatsapp.net"));
+    if (!statusJidList.length) {
+      throw new Error("Nenhum contato na audiência do status.");
+    }
+    const content =
+      opts.mediaType === "video"
+        ? { video: { url: opts.mediaUrl }, caption: opts.caption }
+        : { image: { url: opts.mediaUrl }, caption: opts.caption };
+    const result = await this.sock.sendMessage("status@broadcast", content, {
+      broadcast: true,
+      statusJidList,
+      mediaUploadTimeoutMs: 120_000,
+    });
+    return result?.key.id ?? undefined;
+  }
+
   async logout() {
-    await this.sock?.logout();
-    this.sock = null;
-    this.boundSock = null;
-    this.status = "close";
-    this.messageStore.clear();
-    this.lidToPhone.clear();
-    fs.rmSync(this.sessionPath, { recursive: true, force: true });
+    try {
+      await this.sock?.logout();
+    } catch {
+      /* ignore */
+    }
+    this.clearSessionFiles();
   }
 
   isConnected(): boolean {

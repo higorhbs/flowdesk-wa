@@ -14,6 +14,8 @@ import type {
   Plan,
   PlanStatus,
   BusinessAsaasIntegration,
+  ScheduledStatus,
+  ScheduledStatusState,
 } from "./types.js";
 import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
@@ -92,6 +94,15 @@ function paymentsCol(businessId: string) {
 
 function asaasIntegrationRef(businessId: string) {
   return businessRef(businessId).collection("integrations").doc("asaas");
+}
+
+function scheduledStatusesCol(businessId: string) {
+  return businessRef(businessId).collection("scheduledStatuses");
+}
+
+function phoneToJid(phone: string): string | null {
+  const digits = phone.replace(/\D/g, "");
+  return digits ? `${digits}@s.whatsapp.net` : null;
 }
 
 // ─── Tenants ─────────────────────────────────────────────────────────────────
@@ -746,6 +757,72 @@ export async function updatePaymentsByAsaasId(
 export async function listPayments(businessId: string, limit = 50): Promise<Payment[]> {
   const snap = await paymentsCol(businessId).orderBy("createdAt", "desc").limit(limit).get();
   return snap.docs.map((d) => ({ id: d.id, businessId, ...d.data() }) as Payment);
+}
+
+// ─── Scheduled WhatsApp status ───────────────────────────────────────────────
+
+export async function listScheduledStatuses(businessId: string): Promise<ScheduledStatus[]> {
+  const snap = await scheduledStatusesCol(businessId).orderBy("scheduledAt", "desc").get();
+  return snap.docs.map((d) => ({ id: d.id, businessId, ...d.data() }) as ScheduledStatus);
+}
+
+export async function listDueScheduledStatuses(limit = 25): Promise<ScheduledStatus[]> {
+  const snap = await getDb()
+    .collectionGroup("scheduledStatuses")
+    .where("status", "==", "scheduled")
+    .where("scheduledAt", "<=", nowIso())
+    .limit(limit)
+    .get();
+  return snap.docs.map((d) => {
+    const businessId = d.ref.parent.parent?.id ?? "";
+    return { id: d.id, businessId, ...d.data() } as ScheduledStatus;
+  });
+}
+
+export async function claimScheduledStatus(
+  businessId: string,
+  id: string
+): Promise<ScheduledStatus | null> {
+  const ref = scheduledStatusesCol(businessId).doc(id);
+  return getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const row = { id: snap.id, businessId, ...snap.data() } as ScheduledStatus;
+    if (row.status !== "scheduled") return null;
+    const ts = nowIso();
+    tx.update(ref, { status: "publishing" satisfies ScheduledStatusState, updatedAt: ts });
+    return { ...row, status: "publishing", updatedAt: ts };
+  });
+}
+
+export async function finishScheduledStatus(
+  businessId: string,
+  id: string,
+  outcome: { status: "published" } | { status: "failed"; error: string }
+) {
+  const ts = nowIso();
+  const patch: Record<string, unknown> = { status: outcome.status, updatedAt: ts };
+  if (outcome.status === "published") patch.publishedAt = ts;
+  if (outcome.status === "failed") patch.error = outcome.error.slice(0, 500);
+  await scheduledStatusesCol(businessId).doc(id).update(patch);
+}
+
+export async function listStatusAudienceJids(businessId: string, max = 400): Promise<string[]> {
+  const snap = await conversationsCol(businessId).get();
+  const jids = new Set<string>();
+  for (const d of snap.docs) {
+    const c = d.data() as Conversation;
+    const raw = c.replyJid?.trim() || c.customerPhone?.trim() || "";
+    if (!raw) continue;
+    const jid = raw.includes("@") ? raw : phoneToJid(raw);
+    if (jid?.endsWith("@s.whatsapp.net")) jids.add(jid);
+  }
+  if (!jids.size) {
+    const business = await getBusiness(businessId);
+    const self = business?.phone ? phoneToJid(business.phone) : null;
+    if (self) jids.add(self);
+  }
+  return [...jids].slice(0, max);
 }
 
 // ─── Analytics ─────────────────────────────────────────────────────────────

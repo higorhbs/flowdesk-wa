@@ -1,7 +1,11 @@
+import fs from "fs";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { hasAdminCredential } from "@flowdesk/firebase";
+import { statusMediaRoot } from "./status-media.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const logLevel = process.env.LOG_LEVEL?.trim();
@@ -10,6 +14,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   const corsOrigin = process.env.CORS_ORIGIN;
+  fs.mkdirSync(statusMediaRoot(), { recursive: true });
+  await app.register(multipart, { limits: { fileSize: 16 * 1024 * 1024, files: 1 } });
+  await app.register(fastifyStatic, {
+    root: statusMediaRoot(),
+    prefix: "/status-media/",
+    decorateReply: false,
+  });
+
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
@@ -59,6 +71,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { startReminderWorker, startMessageWorker } = await import("./workers/message-worker.js");
   startMessageWorker(waManager);
   startReminderWorker(waManager);
+
+  const { startStatusScheduler } = await import("./workers/status-scheduler.js");
+  startStatusScheduler(waManager);
 
   return app;
 }

@@ -12,6 +12,7 @@ import { requireAuth } from "../middleware/auth";
 import type { WhatsAppClient } from "@flowdesk/whatsapp-client";
 import { isWhatsAppRuntime, waManager } from "../wa-manager.js";
 import { ensureWhatsAppClient, hasStoredSession, resolveWhatsAppClient } from "../wa-lifecycle.js";
+import { saveStatusMedia } from "../status-media.js";
 
 type ConnectResult = {
   status: string;
@@ -113,6 +114,26 @@ async function connectForQr(
     return { status: "qr", qr: client.lastQrDataUrl };
   }
 
+  if (!force && hasStoredSession(sessionsRoot, businessId)) {
+    log.warn({ businessId }, "whatsapp connect retry after stale session");
+    await resetWhatsAppSession(businessId, sessionsRoot);
+    const fresh = ensureWhatsAppClient(waManager, sessionsRoot, businessId);
+    try {
+      await fresh.kickPairing();
+    } catch (err) {
+      log.error({ err }, "whatsapp kickPairing retry failed");
+      return {
+        status: "error",
+        message: err instanceof Error ? err.message : "Falha ao iniciar sessão WhatsApp",
+      };
+    }
+    const retry = await waitForQr(fresh, 22_000);
+    if (retry.qr || fresh.isConnected()) return retry;
+    if (fresh.lastQrDataUrl) {
+      return { status: "qr", qr: fresh.lastQrDataUrl };
+    }
+  }
+
   return {
     status: "connecting",
     message: "Gerando QR Code. Aguarde nesta tela — o status atualiza sozinho.",
@@ -161,24 +182,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     if (!client) {
       client = ensureWhatsAppClient(waManager, sessionsRoot, id);
     }
-    if (client && !client.isConnected() && !client.lastQrDataUrl) {
-      try {
-        await client.kickPairing();
-      } catch (err) {
-        req.log.error({ err }, "whatsapp status kickPairing failed");
-      }
-    }
-    if (client && !client.isConnected()) {
-      const deadline = Date.now() + 8000;
-      while (Date.now() < deadline) {
-        if (client.isConnected() || client.lastQrDataUrl) break;
-        await new Promise((r) => setTimeout(r, 250));
-      }
-    }
-    let connected = client?.isConnected() ?? false;
-    if (!connected && business.isConnected && hasStoredSession(sessionsRoot, id)) {
-      connected = true;
-    }
+    const connected = client?.isConnected() ?? false;
     if (connected !== business.isConnected) {
       await setBusinessConnected(id, connected);
     }
@@ -248,5 +252,25 @@ export async function whatsappRoutes(app: FastifyInstance) {
     });
 
     return { messageId: waMessageId, message };
+  });
+
+  app.post("/businesses/:id/whatsapp/status/upload", async (req, reply) => {
+    if (!isWhatsAppRuntime()) return waUnavailable(reply);
+
+    const { id } = req.params as { id: string };
+    const business = await getBusiness(id, req.tenantId);
+    if (!business) return reply.status(404).send({ error: "Negócio não encontrado" });
+
+    const part = await req.file();
+    if (!part) return reply.status(400).send({ error: "Arquivo obrigatório" });
+
+    try {
+      const buffer = await part.toBuffer();
+      const result = await saveStatusMedia(id, buffer, part.mimetype);
+      return reply.send(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload inválido";
+      return reply.status(400).send({ error: message });
+    }
   });
 }
