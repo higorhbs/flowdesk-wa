@@ -39,8 +39,13 @@ COPY --from=builder /app/packages/firebase/dist packages/firebase/dist
 COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/whatsapp-client/dist packages/whatsapp-client/dist
 
-RUN mkdir -p /app/sessions && chown node:node /app/sessions
-USER node
+RUN apk add --no-cache su-exec \
+  && mkdir -p /app/sessions /app/status-media \
+  && chown -R node:node /app/sessions /app/status-media
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 3001
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "apps/wa-api/dist/index.js"]
