@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "pnpm --filter @flowdesk/wa-api dev",
     "build": "pnpm --filter @flowdesk/wa-api build",
-    "start": "pnpm --filter @flowdesk/wa-api start"
+    "start": "pnpm --filter @flowdesk/wa-api start",
+    "setup:vm-env": "node scripts/setup-vm-env.mjs",
+    "send:vm-env": "bash scripts/send-vm-env.sh"
   },
   "engines": {
     "node": ">=20"
