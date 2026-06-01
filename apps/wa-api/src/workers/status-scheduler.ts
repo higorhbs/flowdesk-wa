@@ -37,14 +37,16 @@ async function publishOne(waManager: WhatsAppManager, post: { businessId: string
 
   try {
     const audience = await listStatusAudienceJids(post.businessId);
-    await client.publishStatus({
+    const msgId = await client.publishStatus({
       mediaUrl: claimed.mediaUrl,
       mediaType: claimed.mediaType,
       caption: claimed.caption,
       statusJidList: audience,
     });
     await finishScheduledStatus(post.businessId, post.id, { status: "published" });
-    console.log(`[status] published business=${post.businessId} id=${post.id}`);
+    console.log(
+      `[status] published business=${post.businessId} id=${post.id} waMsg=${msgId ?? "-"} audience=${audience.length}`
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha ao publicar status";
     await finishScheduledStatus(post.businessId, post.id, { status: "failed", error: message });

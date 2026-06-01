@@ -359,6 +359,34 @@ export class WhatsAppClient extends EventEmitter {
     return result?.key.id ?? undefined;
   }
 
+  getOwnJid(): string | undefined {
+    const id = this.sock?.user?.id;
+    if (!id) return undefined;
+    const normalized = jidNormalizedUser(id);
+    if (normalized?.endsWith("@s.whatsapp.net")) return normalized;
+    return toSendJid(id);
+  }
+
+  private async loadStatusMedia(
+    mediaUrl: string,
+    mediaType: "image" | "video"
+  ): Promise<{ buffer: Buffer; mimetype: string }> {
+    const res = await fetch(mediaUrl, { redirect: "follow" });
+    if (!res.ok) {
+      throw new Error(`Mídia inacessível para o WhatsApp (${res.status}). Confira a URL pública.`);
+    }
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (!buffer.length) throw new Error("Arquivo de mídia vazio.");
+    const headerType = res.headers.get("content-type")?.split(";")[0]?.trim();
+    if (mediaType === "video") {
+      return { buffer, mimetype: headerType || "video/mp4" };
+    }
+    if (headerType?.startsWith("image/")) return { buffer, mimetype: headerType };
+    if (mediaUrl.includes(".png")) return { buffer, mimetype: "image/png" };
+    if (mediaUrl.includes(".webp")) return { buffer, mimetype: "image/webp" };
+    return { buffer, mimetype: "image/jpeg" };
+  }
+
   async publishStatus(opts: {
     mediaUrl: string;
     mediaType: "image" | "video";
@@ -366,21 +394,32 @@ export class WhatsAppClient extends EventEmitter {
     statusJidList: string[];
   }): Promise<string | undefined> {
     if (!this.sock) throw new Error("Socket not connected");
-    const statusJidList = opts.statusJidList
-      .map((j) => (j.includes("@") ? jidNormalizedUser(j) || j : toSendJid(j)))
-      .filter((j) => j.endsWith("@s.whatsapp.net"));
+
+    const own = this.getOwnJid();
+    const audience = new Set<string>();
+    if (own) audience.add(own);
+    for (const j of opts.statusJidList) {
+      const jid = j.includes("@") ? jidNormalizedUser(j) || j : toSendJid(j);
+      if (jid.endsWith("@s.whatsapp.net")) audience.add(jid);
+    }
+    const statusJidList = [...audience].slice(0, 500);
     if (!statusJidList.length) {
       throw new Error("Nenhum contato na audiência do status.");
     }
+
+    const { buffer, mimetype } = await this.loadStatusMedia(opts.mediaUrl, opts.mediaType);
     const content =
       opts.mediaType === "video"
-        ? { video: { url: opts.mediaUrl }, caption: opts.caption }
-        : { image: { url: opts.mediaUrl }, caption: opts.caption };
+        ? { video: buffer, mimetype, caption: opts.caption }
+        : { image: buffer, mimetype, caption: opts.caption };
+
     const result = await this.sock.sendMessage("status@broadcast", content, {
       broadcast: true,
       statusJidList,
-      mediaUploadTimeoutMs: 120_000,
+      mediaUploadTimeoutMs: 180_000,
     });
+
+    await new Promise((r) => setTimeout(r, 3_000));
     return result?.key.id ?? undefined;
   }
 
