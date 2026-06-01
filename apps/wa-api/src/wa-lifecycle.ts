@@ -4,6 +4,7 @@ import type { WhatsAppClient, WhatsAppManager, WhatsAppMessage } from "@flowdesk
 import { setBusinessConnected } from "@flowdesk/firebase";
 import { processMessage } from "./services/bot.js";
 import { getMessageQueue } from "./workers/message-worker.js";
+import { waManager } from "./wa-manager.js";
 
 const lifecycleAttached = new WeakSet<WhatsAppClient>();
 
@@ -149,6 +150,26 @@ export async function resolveWhatsAppClient(
   }
 
   return client.isConnected() ? client : null;
+}
+
+export async function teardownWhatsAppSession(businessId: string) {
+  const sessionsRoot = process.env.WA_SESSION_PATH?.trim();
+  if (!sessionsRoot) return;
+
+  const existing = waManager.get(businessId);
+  if (existing) {
+    try {
+      await existing.logout();
+    } catch {
+      const sessionDir = path.join(sessionsRoot, businessId);
+      if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
+    }
+    waManager.remove(businessId);
+    return;
+  }
+
+  const sessionDir = path.join(sessionsRoot, businessId);
+  if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
 }
 
 export async function restoreWhatsAppSessions(

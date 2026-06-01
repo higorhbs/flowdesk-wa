@@ -12,6 +12,10 @@ API mínima para conectar WhatsApp, processar mensagens do bot e gravar no Fires
 | POST | `/billing/checkout` | Checkout Stripe (plano) |
 | POST | `/billing/portal` | Portal do cliente Stripe |
 | POST | `/billing/sync` | Sincronizar assinatura |
+| GET | `/privacy/export` | Exportar dados (LGPD) |
+| POST | `/privacy/delete-account` | Excluir conta |
+| POST | `/privacy/anonymize` | Anonimizar dados |
+| POST | `/privacy/consent` | Registrar consentimento |
 | POST | `/webhooks/stripe` | Webhook Stripe |
 | POST | `/businesses/:id/whatsapp/connect` | Gerar QR Code |
 | GET | `/businesses/:id/whatsapp/status` | Status da conexão |

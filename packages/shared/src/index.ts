@@ -321,3 +321,4 @@ export * from "./bot-menu.js";
 export * from "./business-vocabulary.js";
 export * from "./message-role.js";
 export * from "./trial.js";
+export * from "./stripe-price.js";

@@ -7,8 +7,11 @@ import fastifyStatic from "@fastify/static";
 import fastifyRawBody from "fastify-raw-body";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { billingRoutes } from "./routes/billing.js";
+import { privacyRoutes } from "./routes/privacy.js";
 import { webhookRoutes } from "./routes/webhooks.js";
+import Stripe from "stripe";
 import { hasAdminCredential } from "@flowdesk/firebase";
+import { PLAN_PRICES, planPriceBrlCents } from "@flowdesk/shared";
 import { statusMediaRoot } from "./status-media.js";
 import { isCorsOriginAllowed } from "./cors.js";
 
@@ -70,8 +73,38 @@ export async function buildApp(): Promise<FastifyInstance> {
     stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
     stripeWebhook: Boolean(process.env.STRIPE_WEBHOOK_SECRET?.trim()),
   }));
+  app.get("/health/billing/prices", async (_req, reply) => {
+    const key = process.env.STRIPE_SECRET_KEY?.trim();
+    if (!key) return reply.status(503).send({ ok: false, error: "STRIPE_SECRET_KEY ausente" });
+    const stripe = new Stripe(key);
+    const plans = ["STARTER", "PRO", "UNLIMITED"] as const;
+    const prices: Record<string, { priceId: string | null; brl: number; stripeBrl: number | null; ok: boolean }> = {};
+    for (const plan of plans) {
+      const priceId = process.env[`STRIPE_PRICE_${plan}`]?.trim() ?? null;
+      const brl = PLAN_PRICES[plan].brl;
+      if (!priceId) {
+        prices[plan] = { priceId: null, brl, stripeBrl: null, ok: false };
+        continue;
+      }
+      try {
+        const p = await stripe.prices.retrieve(priceId);
+        const stripeBrl = (p.unit_amount ?? 0) / 100;
+        prices[plan] = {
+          priceId,
+          brl,
+          stripeBrl,
+          ok: p.unit_amount === planPriceBrlCents(plan),
+        };
+      } catch {
+        prices[plan] = { priceId, brl, stripeBrl: null, ok: false };
+      }
+    }
+    const ok = Object.values(prices).every((p) => p.ok);
+    return reply.status(ok ? 200 : 503).send({ ok, prices });
+  });
 
   await app.register(billingRoutes);
+  await app.register(privacyRoutes);
   await app.register(webhookRoutes);
   await app.register(whatsappRoutes);
 

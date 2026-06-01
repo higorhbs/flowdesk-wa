@@ -1,7 +1,7 @@
 import { FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import Stripe from "stripe";
-import { PLAN_PRICES, APP_DISPLAY_NAME } from "@flowdesk/shared";
+import { PLAN_PRICES, APP_DISPLAY_NAME, stripePriceMismatchMessage } from "@flowdesk/shared";
 import { createTenant, getAdminAuth, getTenant, updateTenant } from "@flowdesk/firebase";
 import type { Tenant } from "@flowdesk/firebase";
 import { requireAuth } from "../middleware/auth";
@@ -102,6 +102,16 @@ function planPriceId(plan: "STARTER" | "PRO" | "UNLIMITED"): string {
   const price = map[plan];
   if (!price) throw new Error(`Preço Stripe não configurado para plano ${plan}`);
   return price;
+}
+
+async function assertPlanStripePrice(
+  stripe: ReturnType<typeof getStripe>,
+  plan: "STARTER" | "PRO" | "UNLIMITED",
+  priceId: string
+) {
+  const stripePrice = await stripe.prices.retrieve(priceId);
+  const mismatch = stripePriceMismatchMessage(plan, stripePrice.unit_amount);
+  if (mismatch) throw new Error(mismatch);
 }
 
 function planFromPriceId(priceId: string | null | undefined): Tenant["plan"] | null {
@@ -289,6 +299,7 @@ export async function billingRoutes(app: FastifyInstance) {
 
       const origin = resolveBillingOrigin(req);
       const priceId = planPriceId(plan);
+      await assertPlanStripePrice(stripe, plan, priceId);
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
         customer: customerId,
