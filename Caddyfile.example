@@ -1,0 +1,8 @@
+{
+	email seu-email@exemplo.com
+}
+
+zapflow.duckdns.org {
+	encode gzip
+	reverse_proxy wa-api:3001
+}

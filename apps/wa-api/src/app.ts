@@ -6,6 +6,7 @@ import fastifyStatic from "@fastify/static";
 import { whatsappRoutes } from "./routes/whatsapp.js";
 import { hasAdminCredential } from "@flowdesk/firebase";
 import { statusMediaRoot } from "./status-media.js";
+import { isCorsOriginAllowed } from "./cors.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const logLevel = process.env.LOG_LEVEL?.trim();
@@ -14,31 +15,24 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   const corsOrigin = process.env.CORS_ORIGIN;
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (isCorsOriginAllowed(origin, corsOrigin)) return cb(null, origin);
+      app.log.warn({ origin, corsOrigin }, "CORS origin blocked");
+      cb(new Error("CORS origin not allowed"), false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+  });
+
   fs.mkdirSync(statusMediaRoot(), { recursive: true });
   await app.register(multipart, { limits: { fileSize: 16 * 1024 * 1024, files: 1 } });
   await app.register(fastifyStatic, {
     root: statusMediaRoot(),
     prefix: "/status-media/",
     decorateReply: false,
-  });
-
-  await app.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      if (corsOrigin === "*" || corsOrigin === origin) return cb(null, true);
-      if (
-        !corsOrigin &&
-        (/^https?:\/\/localhost(:\d+)?$/.test(origin) ||
-          /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
-          /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin) ||
-          /^https:\/\/[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/.test(origin))
-      ) {
-        return cb(null, true);
-      }
-      if (corsOrigin?.split(",").map((o) => o.trim()).includes(origin)) return cb(null, true);
-      cb(new Error("CORS"), false);
-    },
-    credentials: true,
   });
 
   app.get("/health", () => ({

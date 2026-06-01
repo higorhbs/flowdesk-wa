@@ -1,27 +1,24 @@
-x-logging: &default-logging
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3"
-
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      wa-api:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    logging: *default-logging
     volumes:
       - redis_data:/data
-    command:
-      [
-        "redis-server",
-        "--appendonly",
-        "yes",
-        "--maxmemory",
-        "128mb",
-        "--maxmemory-policy",
-        "allkeys-lru",
-      ]
-    mem_limit: "256m"
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -34,33 +31,43 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     init: true
-    logging: *default-logging
+    expose:
+      - "3001"
     depends_on:
       redis:
         condition: service_healthy
-    ports:
-      - "${API_PORT:-3001}:3001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
     environment:
       NODE_ENV: production
       API_PORT: 3001
       REDIS_URL: redis://redis:6379
       WA_SESSION_PATH: /app/sessions
+      WA_STATUS_MEDIA_PATH: /app/status-media
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/.secrets/firebase-adminsdk.json}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://zapflow-higor-2026.web.app,https://zapflow-higor-2026.firebaseapp.com}
-      WA_API_PUBLIC_URL: ${WA_API_PUBLIC_URL:-http://zapflow.duckdns.org:3001}
-      WA_STATUS_MEDIA_PATH: /app/status-media
-      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
-      ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      WA_API_PUBLIC_URL: ${WA_API_PUBLIC_URL:-https://zapflow.duckdns.org}
     volumes:
       - wa_sessions:/app/sessions
       - wa_status_media:/app/status-media
       - ${SECRETS_DIR:-./.secrets}:/app/.secrets:ro
-    mem_limit: "512m"
 
 volumes:
   redis_data:
   wa_sessions:
   wa_status_media:
+  caddy_data:
+  caddy_config:
