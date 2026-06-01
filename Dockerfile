@@ -1,6 +1,7 @@
 FROM node:20-alpine AS builder
-ARG NODE_OPTIONS=--max-old-space-size=384
+ARG NODE_OPTIONS=--max-old-space-size=256
 ENV NODE_OPTIONS=${NODE_OPTIONS}
+ENV CI=true
 RUN corepack enable
 WORKDIR /app
 
@@ -16,10 +17,10 @@ COPY apps/wa-api apps/wa-api
 COPY packages/firebase packages/firebase
 COPY packages/shared packages/shared
 COPY packages/whatsapp-client packages/whatsapp-client
-RUN pnpm --filter @flowdesk/firebase build \
-  && pnpm --filter @flowdesk/shared build \
-  && pnpm --filter @flowdesk/whatsapp-client build \
-  && pnpm --filter @flowdesk/wa-api build
+RUN pnpm --filter @flowdesk/shared build
+RUN pnpm --filter @flowdesk/firebase build
+RUN pnpm --filter @flowdesk/whatsapp-client build
+RUN pnpm --filter @flowdesk/wa-api build
 
 FROM node:20-alpine AS runner
 RUN corepack enable

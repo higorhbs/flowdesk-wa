@@ -24,6 +24,20 @@ API mínima para conectar WhatsApp, processar mensagens do bot e gravar no Fires
 
 Rotas autenticadas exigem `Authorization: Bearer <Firebase ID Token>`.
 
+## Deploy na VM sem travar
+
+Build na Oracle free tier costuma **travar no `tsc`** (pouca RAM). Prefira imagem pronta do GitHub:
+
+```bash
+# após push em main → Actions → Build WA API Docker image
+docker login ghcr.io
+export WA_API_IMAGE=ghcr.io/SEU_USER/flowdesk-wa:latest
+docker compose -f docker-compose.https.pull.yml pull
+docker compose -f docker-compose.https.pull.yml up -d
+```
+
+Detalhes: `scripts/oracle/VM-BUILD.md`
+
 ## Setup
 
 ```bash

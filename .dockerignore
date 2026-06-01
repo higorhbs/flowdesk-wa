@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/.turbo
+**/dist
+.git
+.sessions
+**/sessions
+**/*.log
+.env
+.env.*
+!.env.example
+.secrets
+apps/wa-api/sessions
+status-media
+**/status-media
