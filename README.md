@@ -7,13 +7,18 @@ API mínima para conectar WhatsApp, processar mensagens do bot e gravar no Fires
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/health` | Health check |
+| GET | `/health/billing` | Stripe configurado? |
 | GET | `/health/whatsapp` | Status das sessões |
+| POST | `/billing/checkout` | Checkout Stripe (plano) |
+| POST | `/billing/portal` | Portal do cliente Stripe |
+| POST | `/billing/sync` | Sincronizar assinatura |
+| POST | `/webhooks/stripe` | Webhook Stripe |
 | POST | `/businesses/:id/whatsapp/connect` | Gerar QR Code |
 | GET | `/businesses/:id/whatsapp/status` | Status da conexão |
 | POST | `/businesses/:id/whatsapp/disconnect` | Desconectar |
 | POST | `/businesses/:id/whatsapp/send` | Enviar mensagem manual |
 
-Todas as rotas WhatsApp exigem `Authorization: Bearer <Firebase ID Token>`.
+Rotas autenticadas exigem `Authorization: Bearer <Firebase ID Token>`.
 
 ## Setup
 
@@ -52,6 +57,8 @@ Produção com HTTPS: `docker compose -f docker-compose.https.yml up -d --build`
 
 Inclua `https://flowdesk.ia.br` em `CORS_ORIGIN` se o painel estiver nesse domínio.
 
-**Checkout Stripe (planos)** não roda neste repo — use a API do monorepo **FlowDesk** (`~/FlowDesk` + `scripts/oracle/deploy-api.sh`) ou `NEXT_PUBLIC_API_URL=https://SEU-PROJETO.web.app/api` (Firebase Functions).
+**Checkout Stripe:** mesma URL (`NEXT_PUBLIC_API_URL` = `NEXT_PUBLIC_WA_API_URL` = `https://zapflow.duckdns.org`). Configure `STRIPE_*` no `.env` da VM.
 
-O dashboard usa Firestore direto; só WhatsApp aponta para este serviço.
+No Mac (repo FlowDesk): `pnpm setup:vm-env` → copie `.env.vm` para `~/flowdesk-wa/.env` na VM.
+
+O dashboard usa Firestore direto; WhatsApp e cobrança apontam para este serviço.

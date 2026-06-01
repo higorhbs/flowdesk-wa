@@ -1,9 +1,13 @@
 import fs from "fs";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import formbody from "@fastify/formbody";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import fastifyRawBody from "fastify-raw-body";
 import { whatsappRoutes } from "./routes/whatsapp.js";
+import { billingRoutes } from "./routes/billing.js";
+import { webhookRoutes } from "./routes/webhooks.js";
 import { hasAdminCredential } from "@flowdesk/firebase";
 import { statusMediaRoot } from "./status-media.js";
 import { isCorsOriginAllowed } from "./cors.js";
@@ -12,6 +16,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   const logLevel = process.env.LOG_LEVEL?.trim();
   const app = Fastify({
     logger: logLevel ? { level: logLevel } : true,
+  });
+
+  await app.register(formbody);
+  await app.register(fastifyRawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+    routes: ["/webhooks/stripe"],
   });
 
   const corsOrigin = process.env.CORS_ORIGIN;
@@ -53,7 +66,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     adminConfigured: hasAdminCredential(),
     projectId: process.env.FIREBASE_PROJECT_ID ?? null,
   }));
+  app.get("/health/billing", () => ({
+    stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
+    stripeWebhook: Boolean(process.env.STRIPE_WEBHOOK_SECRET?.trim()),
+  }));
 
+  await app.register(billingRoutes);
+  await app.register(webhookRoutes);
   await app.register(whatsappRoutes);
 
   const { waManager } = await import("./wa-manager.js");

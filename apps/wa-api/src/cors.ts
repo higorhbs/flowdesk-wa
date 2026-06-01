@@ -6,6 +6,8 @@ const LOCAL_HOST =
 
 export function collectCorsAllowList(envValue?: string): Set<string> {
   const list = new Set<string>();
+  const web = process.env.WEB_ORIGIN?.trim();
+  if (web) list.add(web);
   if (!envValue?.trim()) return list;
   if (envValue.trim() === "*") return list;
   for (const part of envValue.split(",")) {
