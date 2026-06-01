@@ -88,6 +88,8 @@ export async function processMessage(ctx: BotContext): Promise<BotResponse[]> {
     content: messageBody,
   });
 
+  if (business.botAutoReplyEnabled === false) return [];
+
   if (conversation.status === "ATTENDING" && !isExitCommand(messageBody))
     return [];
 

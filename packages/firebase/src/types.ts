@@ -60,6 +60,8 @@ export interface Business {
   botMenu?: BotMenuItemConfig[];
   botMenuEnabled?: boolean;
   greetingEnabled?: boolean;
+  /** false = IA não envia nenhuma mensagem automática (menu, FAQ, saudação, fora do horário) */
+  botAutoReplyEnabled?: boolean;
   thanksMsg?: string;
   isConnected: boolean;
   createdAt: string;
