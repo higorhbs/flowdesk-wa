@@ -52,6 +52,7 @@ services:
       REDIS_URL: redis://redis:6379
       WA_SESSION_PATH: /app/sessions
       WA_STATUS_MEDIA_PATH: /app/status-media
+      WA_CHAT_MEDIA_PATH: /app/chat-media
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/.secrets/firebase-adminsdk.json}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}

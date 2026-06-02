@@ -84,8 +84,16 @@ async function resolveInboundMedia(
 ) {
   if (!msg.mediaType) return {};
   const downloaded = await client.downloadMessageMedia(raw);
-  if (!downloaded) return { mediaType: msg.mediaType };
+  if (!downloaded) {
+    console.warn(
+      `[whatsapp] media download failed business=${businessId} type=${msg.mediaType} id=${msg.messageId}`
+    );
+    return { mediaType: msg.mediaType };
+  }
   const saved = await saveChatMedia(businessId, downloaded.buffer, downloaded.mimetype, downloaded.mediaType);
+  console.log(
+    `[whatsapp] media saved business=${businessId} type=${saved.mediaType} url=${saved.mediaUrl}`
+  );
   return { mediaUrl: saved.mediaUrl, mediaType: saved.mediaType };
 }
 

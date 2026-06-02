@@ -372,35 +372,56 @@ export class WhatsAppClient extends EventEmitter {
     return this.sendChatMedia(to, imageUrl, "image", caption);
   }
 
+  private messageForDownload(waMessage: WAMessage): WAMessage {
+    const key = waMessage.key;
+    if (!key?.id) return waMessage;
+    const stored = this.messageStore.get(messageStoreKey(key));
+    if (stored && waMessage.message) return waMessage;
+    if (stored) return { ...waMessage, message: stored };
+    return waMessage;
+  }
+
   async downloadMessageMedia(
     waMessage: WAMessage
   ): Promise<{ buffer: Buffer; mimetype: string; mediaType: WhatsAppMediaType } | null> {
     if (!this.sock) return null;
-    const mediaType = detectMediaType(waMessage.message);
+    const payload = this.messageForDownload(waMessage);
+    const mediaType = detectMediaType(payload.message);
     if (!mediaType) return null;
-    try {
-      const raw = await downloadMediaMessage(
-        waMessage,
-        "buffer",
-        {},
-        { logger: this.logger as any, reuploadRequest: this.sock.updateMediaMessage }
-      );
-      if (!raw) return null;
-      const content = extractMessageContent(waMessage.message ?? undefined);
-      const mimetype =
-        content?.imageMessage?.mimetype ??
-        content?.videoMessage?.mimetype ??
-        content?.audioMessage?.mimetype ??
-        (mediaType === "image"
-          ? "image/jpeg"
-          : mediaType === "video"
-            ? "video/mp4"
-            : "audio/ogg; codecs=opus");
-      return { buffer: Buffer.isBuffer(raw) ? raw : Buffer.from(raw as Uint8Array), mimetype, mediaType };
-    } catch (err) {
-      console.error(`[wa:${this.businessId}] downloadMessageMedia failed:`, err);
-      return null;
+
+    const content = extractMessageContent(payload.message ?? undefined);
+    const mimetype =
+      content?.imageMessage?.mimetype ??
+      content?.videoMessage?.mimetype ??
+      content?.audioMessage?.mimetype ??
+      (mediaType === "image"
+        ? "image/jpeg"
+        : mediaType === "video"
+          ? "video/mp4"
+          : "audio/ogg; codecs=opus");
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 700 * attempt));
+      }
+      try {
+        const raw = await downloadMediaMessage(
+          payload,
+          "buffer",
+          { startTime: Date.now() - 60_000 },
+          { logger: this.logger as any, reuploadRequest: this.sock.updateMediaMessage }
+        );
+        if (!raw) continue;
+        const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as Uint8Array);
+        if (!buffer.length) continue;
+        return { buffer, mimetype, mediaType };
+      } catch (err) {
+        lastErr = err;
+      }
     }
+    console.error(`[wa:${this.businessId}] downloadMessageMedia failed after retries:`, lastErr);
+    return null;
   }
 
   private async loadRemoteMedia(
