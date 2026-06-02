@@ -41,8 +41,8 @@ COPY --from=builder /app/packages/shared/dist packages/shared/dist
 COPY --from=builder /app/packages/whatsapp-client/dist packages/whatsapp-client/dist
 
 RUN apk add --no-cache su-exec \
-  && mkdir -p /app/sessions /app/status-media \
-  && chown -R node:node /app/sessions /app/status-media
+  && mkdir -p /app/sessions /app/status-media /app/chat-media \
+  && chown -R node:node /app/sessions /app/status-media /app/chat-media
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

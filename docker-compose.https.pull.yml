@@ -70,11 +70,13 @@ services:
     volumes:
       - wa_sessions:/app/sessions
       - wa_status_media:/app/status-media
+      - wa_chat_media:/app/chat-media
       - ${SECRETS_DIR:-./.secrets}:/app/.secrets:ro
 
 volumes:
   redis_data:
   wa_sessions:
   wa_status_media:
+  wa_chat_media:
   caddy_data:
   caddy_config:
