@@ -409,7 +409,7 @@ export class WhatsAppClient extends EventEmitter {
         const raw = await downloadMediaMessage(
           payload,
           "buffer",
-          { startTime: Date.now() - 60_000 },
+          {},
           { logger: this.logger as any, reuploadRequest: this.sock.updateMediaMessage }
         );
         if (!raw) continue;
