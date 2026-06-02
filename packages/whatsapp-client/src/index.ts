@@ -1,5 +1,6 @@
 import makeWASocket, {
   DisconnectReason,
+  downloadMediaMessage,
   extractMessageContent,
   fetchLatestBaileysVersion,
   getContentType,
@@ -15,6 +16,8 @@ import makeWASocket, {
   type WAMessage,
   type WASocket,
 } from "@whiskeysockets/baileys";
+
+export type { WAMessage };
 import NodeCache from "@cacheable/node-cache";
 import { Boom } from "@hapi/boom";
 import pino from "pino";
@@ -22,6 +25,8 @@ import { toDataURL } from "qrcode";
 import path from "path";
 import fs from "fs";
 import EventEmitter from "events";
+
+export type WhatsAppMediaType = "image" | "video" | "audio";
 
 export interface WhatsAppMessage {
   from: string;
@@ -31,6 +36,7 @@ export interface WhatsAppMessage {
   timestamp: number;
   isGroup: boolean;
   pushName?: string;
+  mediaType?: WhatsAppMediaType;
 }
 
 export type ConnectionStatus = "connecting" | "open" | "close" | "qr";
@@ -112,6 +118,17 @@ function extractBody(message: proto.IMessage | null | undefined): string {
   return "";
 }
 
+export function detectMediaType(
+  message: proto.IMessage | null | undefined
+): WhatsAppMediaType | undefined {
+  const content = extractMessageContent(message ?? undefined);
+  if (!content) return undefined;
+  if (content.imageMessage || content.stickerMessage) return "image";
+  if (content.videoMessage) return "video";
+  if (content.audioMessage || content.ptvMessage) return "audio";
+  return undefined;
+}
+
 function socketIsOpen(sock: WASocket | null): boolean {
   if (!sock) return false;
   const ws = (sock as { ws?: { readyState?: number } }).ws;
@@ -159,8 +176,9 @@ export class WhatsAppClient extends EventEmitter {
       this.messageStore.set(messageStoreKey(msg.key), msg.message);
     }
 
+    const mediaType = detectMediaType(msg.message);
     const body = extractBody(msg.message);
-    if (!body) {
+    if (!body && !mediaType) {
       const inner = msg.message ? getContentType(extractMessageContent(msg.message) ?? {}) : null;
       console.log(
         `[wa:${this.businessId}] empty_body jid=${rawJid} stub=${msg.messageStubType ?? "-"} type=${inner ?? "-"}`
@@ -172,17 +190,18 @@ export class WhatsAppClient extends EventEmitter {
     const parsed: WhatsAppMessage = {
       from,
       replyJid,
-      body,
+      body: body || (mediaType === "image" ? "[imagem]" : mediaType === "video" ? "[video]" : "[audio]"),
       messageId,
       timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
       isGroup: !!isJidGroup(rawJid),
       pushName: msg.pushName ?? undefined,
+      mediaType,
     };
 
     console.log(
-      `[wa:${this.businessId}] inbound from=${parsed.from} reply=${parsed.replyJid} text=${parsed.body.slice(0, 80)}`
+      `[wa:${this.businessId}] inbound from=${parsed.from} reply=${parsed.replyJid} text=${parsed.body.slice(0, 80)} media=${mediaType ?? "-"}`
     );
-    this.emit("message", parsed);
+    this.emit("message", parsed, msg);
   }
 
   private bindSocketEvents(saveCreds: () => Promise<void>) {
@@ -350,12 +369,84 @@ export class WhatsAppClient extends EventEmitter {
   }
 
   async sendImage(to: string, imageUrl: string, caption?: string): Promise<string | undefined> {
+    return this.sendChatMedia(to, imageUrl, "image", caption);
+  }
+
+  async downloadMessageMedia(
+    waMessage: WAMessage
+  ): Promise<{ buffer: Buffer; mimetype: string; mediaType: WhatsAppMediaType } | null> {
+    if (!this.sock) return null;
+    const mediaType = detectMediaType(waMessage.message);
+    if (!mediaType) return null;
+    try {
+      const raw = await downloadMediaMessage(
+        waMessage,
+        "buffer",
+        {},
+        { logger: this.logger as any, reuploadRequest: this.sock.updateMediaMessage }
+      );
+      if (!raw) return null;
+      const content = extractMessageContent(waMessage.message ?? undefined);
+      const mimetype =
+        content?.imageMessage?.mimetype ??
+        content?.videoMessage?.mimetype ??
+        content?.audioMessage?.mimetype ??
+        (mediaType === "image"
+          ? "image/jpeg"
+          : mediaType === "video"
+            ? "video/mp4"
+            : "audio/ogg; codecs=opus");
+      return { buffer: Buffer.isBuffer(raw) ? raw : Buffer.from(raw as Uint8Array), mimetype, mediaType };
+    } catch (err) {
+      console.error(`[wa:${this.businessId}] downloadMessageMedia failed:`, err);
+      return null;
+    }
+  }
+
+  private async loadRemoteMedia(
+    mediaUrl: string,
+    mediaType: WhatsAppMediaType
+  ): Promise<{ buffer: Buffer; mimetype: string }> {
+    const res = await fetch(mediaUrl, { redirect: "follow" });
+    if (!res.ok) {
+      throw new Error(`Mídia inacessível (${res.status}).`);
+    }
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (!buffer.length) throw new Error("Arquivo de mídia vazio.");
+    const headerType = res.headers.get("content-type")?.split(";")[0]?.trim();
+    if (mediaType === "video") {
+      return { buffer, mimetype: headerType || "video/mp4" };
+    }
+    if (mediaType === "audio") {
+      return { buffer, mimetype: headerType || "audio/ogg" };
+    }
+    if (headerType?.startsWith("image/")) return { buffer, mimetype: headerType };
+    if (mediaUrl.includes(".png")) return { buffer, mimetype: "image/png" };
+    if (mediaUrl.includes(".webp")) return { buffer, mimetype: "image/webp" };
+    return { buffer, mimetype: "image/jpeg" };
+  }
+
+  async sendChatMedia(
+    to: string,
+    mediaUrl: string,
+    mediaType: WhatsAppMediaType,
+    caption?: string
+  ): Promise<string | undefined> {
     if (!this.sock) throw new Error("Socket not connected");
     const jid = toSendJid(to);
-    const result = await this.sock.sendMessage(jid, {
-      image: { url: imageUrl },
-      caption,
-    });
+    const { buffer, mimetype } = await this.loadRemoteMedia(mediaUrl, mediaType);
+    const cap = caption?.trim() || undefined;
+    const content =
+      mediaType === "image"
+        ? { image: buffer, mimetype, caption: cap }
+        : mediaType === "video"
+          ? { video: buffer, mimetype, caption: cap }
+          : {
+              audio: buffer,
+              mimetype,
+              ptt: mimetype.includes("ogg") || mimetype.includes("opus"),
+            };
+    const result = await this.sock.sendMessage(jid, content);
     return result?.key.id ?? undefined;
   }
 

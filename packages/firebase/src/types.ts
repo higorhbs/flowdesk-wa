@@ -54,6 +54,9 @@ export interface Business {
   description?: string;
   logoUrl?: string;
   workingHours: Record<string, unknown>;
+  specialHours?: Record<string, [string, string] | null>;
+  lunchBreak?: [string, string] | null;
+  lunchMsg?: string;
   timezone?: string;
   greetingMsg: string;
   awayMsg: string;
@@ -103,12 +106,15 @@ export interface Conversation {
   createdAt: string;
 }
 
+export type MessageMediaType = "image" | "video" | "audio";
+
 export interface Message {
   id: string;
   conversationId: string;
   role: MessageRole;
   content: string;
   mediaUrl?: string;
+  mediaType?: MessageMediaType;
   waMessageId?: string;
   createdAt: string;
 }

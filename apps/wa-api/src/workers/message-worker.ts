@@ -10,6 +10,8 @@ export interface MessageJob {
   customerName?: string;
   messageBody: string;
   replyJid: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video" | "audio";
 }
 
 export interface ReminderJob {
@@ -51,7 +53,8 @@ export function startMessageWorker(waManager: WhatsAppManager) {
   const worker = new Worker<MessageJob>(
     "messages",
     async (job) => {
-      const { businessId, customerPhone, customerName, messageBody, replyJid } = job.data;
+      const { businessId, customerPhone, customerName, messageBody, replyJid, mediaUrl, mediaType } =
+        job.data;
       const dest = replyJid?.trim() || customerPhone;
 
       const ctx: BotContext = {
@@ -60,6 +63,8 @@ export function startMessageWorker(waManager: WhatsAppManager) {
         customerName,
         messageBody,
         replyJid,
+        mediaUrl,
+        mediaType,
       };
       const responses = await processMessage(ctx);
 

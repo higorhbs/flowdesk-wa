@@ -22,6 +22,8 @@ import {
   APP_DISPLAY_NAME,
   detectIntent,
   isOpenNow,
+  resolveAutoAwayMessage,
+  getStoreAvailability,
   WorkingHours,
   DEFAULT_BUSINESS_TIMEZONE,
   formatCurrency,
@@ -46,12 +48,42 @@ function voc(business: { type?: string }) {
   return getBusinessVocabulary(business.type);
 }
 
+function businessTimezone(business: { timezone?: string }) {
+  return (typeof business.timezone === "string" && business.timezone.trim()) ||
+    DEFAULT_BUSINESS_TIMEZONE;
+}
+
+function awayReply(
+  business: {
+    name: string;
+    awayMsg: string;
+    lunchMsg?: string;
+    workingHours: Record<string, unknown>;
+    timezone?: string;
+    specialHours?: Record<string, [string, string] | null>;
+    lunchBreak?: [string, string] | null;
+  },
+  customerName?: string
+): string {
+  const availability = getStoreAvailability(
+    business.workingHours as WorkingHours,
+    businessTimezone(business),
+    business.specialHours,
+    business.lunchBreak ?? undefined
+  );
+  const raw =
+    resolveAutoAwayMessage(availability, business.awayMsg, business.lunchMsg) ?? business.awayMsg;
+  return renderTemplate(raw, { nome: customerName ?? "cliente", negocio: business.name });
+}
+
 export interface BotContext {
   businessId: string;
   customerPhone: string;
   customerName?: string;
   messageBody: string;
   replyJid?: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video" | "audio";
 }
 
 export interface BotResponse {
@@ -68,7 +100,7 @@ const conversationState = new Map<
 const botPausedSessions = new Set<string>();
 
 export async function processMessage(ctx: BotContext): Promise<BotResponse[]> {
-  const { businessId, customerPhone, customerName, messageBody, replyJid } = ctx;
+  const { businessId, customerPhone, customerName, messageBody, replyJid, mediaUrl, mediaType } = ctx;
   const sessionKey = `${businessId}:${customerPhone}`;
 
   // Busca negócio com relacionamentos necessários
@@ -86,6 +118,7 @@ export async function processMessage(ctx: BotContext): Promise<BotResponse[]> {
   await createMessage(businessId, conversation.id, {
     role: "CUSTOMER",
     content: messageBody,
+    ...(mediaUrl ? { mediaUrl, mediaType } : {}),
   });
 
   if (business.botAutoReplyEnabled === false) return [];
@@ -93,10 +126,13 @@ export async function processMessage(ctx: BotContext): Promise<BotResponse[]> {
   if (conversation.status === "ATTENDING" && !isExitCommand(messageBody))
     return [];
 
-  const tz =
-    (typeof business.timezone === "string" && business.timezone.trim()) ||
-    DEFAULT_BUSINESS_TIMEZONE;
-  const open = isOpenNow(business.workingHours as WorkingHours, tz);
+  const tz = businessTimezone(business);
+  const open = isOpenNow(
+    business.workingHours as WorkingHours,
+    tz,
+    business.specialHours,
+    business.lunchBreak ?? undefined
+  );
 
   if (isExitCommand(messageBody)) {
     return handleBotExit(business, conversation, sessionKey);
@@ -112,7 +148,7 @@ export async function processMessage(ctx: BotContext): Promise<BotResponse[]> {
         ]);
         return [{ text: faqWhenPaused.answer }];
       }
-      const response = business.awayMsg;
+      const response = awayReply(business, customerName);
       await saveAndReturn(business.id, conversation.id, [{ text: response }]);
       return [{ text: response }];
     }
@@ -133,7 +169,7 @@ export async function processMessage(ctx: BotContext): Promise<BotResponse[]> {
   }
 
   if (!open) {
-    const response = business.awayMsg;
+    const response = awayReply(business, customerName);
     await saveAndReturn(business.id, conversation.id, [{ text: response }]);
     return [{ text: response }];
   }

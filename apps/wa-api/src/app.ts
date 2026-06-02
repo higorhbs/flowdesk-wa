@@ -13,6 +13,7 @@ import Stripe from "stripe";
 import { hasAdminCredential } from "@flowdesk/firebase";
 import { PLAN_PRICES, planPriceBrlCents } from "@flowdesk/shared";
 import { statusMediaRoot } from "./status-media.js";
+import { chatMediaRoot } from "./chat-media.js";
 import { isCorsOriginAllowed } from "./cors.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -44,10 +45,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   fs.mkdirSync(statusMediaRoot(), { recursive: true });
+  fs.mkdirSync(chatMediaRoot(), { recursive: true });
   await app.register(multipart, { limits: { fileSize: 16 * 1024 * 1024, files: 1 } });
   await app.register(fastifyStatic, {
     root: statusMediaRoot(),
     prefix: "/status-media/",
+    decorateReply: false,
+  });
+  await app.register(fastifyStatic, {
+    root: chatMediaRoot(),
+    prefix: "/chat-media/",
     decorateReply: false,
   });
 

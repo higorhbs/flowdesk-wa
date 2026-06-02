@@ -13,6 +13,7 @@ import type { WhatsAppClient } from "@flowdesk/whatsapp-client";
 import { isWhatsAppRuntime, waManager } from "../wa-manager.js";
 import { ensureWhatsAppClient, hasStoredSession, resolveWhatsAppClient } from "../wa-lifecycle.js";
 import { saveStatusMedia } from "../status-media.js";
+import { saveChatMedia } from "../chat-media.js";
 
 type ConnectResult = {
   status: string;
@@ -249,6 +250,77 @@ export async function whatsappRoutes(app: FastifyInstance) {
     const message = await createMessage(id, convId, {
       role: "HUMAN",
       content: text.trim(),
+    });
+
+    return { messageId: waMessageId, message };
+  });
+
+  app.post("/businesses/:id/whatsapp/send-media", async (req, reply) => {
+    if (!isWhatsAppRuntime()) return waUnavailable(reply);
+
+    const { id } = req.params as { id: string };
+    const business = await getBusiness(id, req.tenantId);
+    if (!business) return reply.status(404).send({ error: "Negócio não encontrado" });
+
+    let conversationId = "";
+    let caption = "";
+    let fileBuffer: Buffer | null = null;
+    let mimetype = "";
+
+    const parts = req.parts();
+    for await (const part of parts) {
+      if (part.type === "file") {
+        fileBuffer = await part.toBuffer();
+        mimetype = part.mimetype;
+      } else if (part.fieldname === "conversationId") {
+        conversationId = String(part.value ?? "").trim();
+      } else if (part.fieldname === "text") {
+        caption = String(part.value ?? "").trim();
+      }
+    }
+
+    if (!conversationId) {
+      return reply.status(400).send({ error: "conversationId é obrigatório" });
+    }
+    if (!fileBuffer?.length) {
+      return reply.status(400).send({ error: "Arquivo de mídia é obrigatório" });
+    }
+
+    const conv = await getConversation(id, conversationId);
+    if (!conv) return reply.status(404).send({ error: "Conversa não encontrada" });
+
+    const client = await resolveWhatsAppClient(waManager, sessionsRoot, id, { waitMs: 12_000 });
+    if (!client) {
+      await setBusinessConnected(id, false);
+      return reply.status(400).send({
+        error: "WhatsApp desconectado. Abra Conexão WhatsApp e escaneie o QR de novo.",
+      });
+    }
+
+    let mediaUrl: string;
+    let mediaType: "image" | "video" | "audio";
+    try {
+      const saved = await saveChatMedia(id, fileBuffer, mimetype);
+      mediaUrl = saved.mediaUrl;
+      mediaType = saved.mediaType;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload inválido";
+      return reply.status(400).send({ error: message });
+    }
+
+    const dest = conv.replyJid?.trim() || conv.customerPhone?.trim();
+    if (!dest) return reply.status(400).send({ error: "Destino da conversa inválido" });
+
+    const waMessageId = await client.sendChatMedia(dest, mediaUrl, mediaType, caption);
+    const content =
+      caption ||
+      (mediaType === "image" ? "[imagem]" : mediaType === "video" ? "[video]" : "[audio]");
+    const message = await createMessage(id, conversationId, {
+      role: "HUMAN",
+      content,
+      mediaUrl,
+      mediaType,
+      waMessageId,
     });
 
     return { messageId: waMessageId, message };

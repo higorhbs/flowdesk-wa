@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
-import type { WhatsAppClient, WhatsAppManager, WhatsAppMessage } from "@flowdesk/whatsapp-client";
+import type { WhatsAppClient, WhatsAppManager, WhatsAppMessage, WAMessage } from "@flowdesk/whatsapp-client";
 import { setBusinessConnected } from "@flowdesk/firebase";
+import { saveChatMedia } from "./chat-media.js";
 import { processMessage } from "./services/bot.js";
 import { getMessageQueue } from "./workers/message-worker.js";
 import { waManager } from "./wa-manager.js";
@@ -42,13 +43,20 @@ export function attachWhatsAppLifecycle(businessId: string, client: WhatsAppClie
   });
 }
 
-async function deliverBotReplies(businessId: string, client: WhatsAppClient, msg: WhatsAppMessage) {
+async function deliverBotReplies(
+  businessId: string,
+  client: WhatsAppClient,
+  msg: WhatsAppMessage,
+  media?: { mediaUrl?: string; mediaType?: WhatsAppMessage["mediaType"] }
+) {
   const responses = await processMessage({
     businessId,
     customerPhone: msg.from,
     customerName: msg.pushName,
     messageBody: msg.body,
     replyJid: msg.replyJid,
+    mediaUrl: media?.mediaUrl,
+    mediaType: media?.mediaType,
   });
 
   if (responses.length === 0) {
@@ -68,7 +76,24 @@ async function deliverBotReplies(businessId: string, client: WhatsAppClient, msg
   console.log(`[whatsapp] replied business=${businessId} to=${dest} count=${responses.length}`);
 }
 
-async function enqueueInbound(businessId: string, msg: WhatsAppMessage) {
+async function resolveInboundMedia(
+  businessId: string,
+  client: WhatsAppClient,
+  msg: WhatsAppMessage,
+  raw: WAMessage
+) {
+  if (!msg.mediaType) return {};
+  const downloaded = await client.downloadMessageMedia(raw);
+  if (!downloaded) return { mediaType: msg.mediaType };
+  const saved = await saveChatMedia(businessId, downloaded.buffer, downloaded.mimetype, downloaded.mediaType);
+  return { mediaUrl: saved.mediaUrl, mediaType: saved.mediaType };
+}
+
+async function enqueueInbound(
+  businessId: string,
+  msg: WhatsAppMessage,
+  media?: { mediaUrl?: string; mediaType?: WhatsAppMessage["mediaType"] }
+) {
   const queue = getMessageQueue();
   const jobId = msg.messageId ? `${businessId}_${msg.messageId}` : undefined;
   await queue.add(
@@ -79,6 +104,8 @@ async function enqueueInbound(businessId: string, msg: WhatsAppMessage) {
       customerName: msg.pushName,
       messageBody: msg.body,
       replyJid: msg.replyJid,
+      mediaUrl: media?.mediaUrl,
+      mediaType: media?.mediaType,
     },
     {
       jobId,
@@ -95,17 +122,23 @@ export function attachWhatsAppMessageHandler(businessId: string, client: WhatsAp
   if ((client as unknown as Record<string, boolean>)[flag]) return;
   (client as unknown as Record<string, boolean>)[flag] = true;
 
-  client.on("message", (msg) => {
+  client.on("message", (msg: WhatsAppMessage, raw: WAMessage) => {
     void (async () => {
       console.log(
         `[whatsapp] inbound business=${businessId} from=${msg.from} reply=${msg.replyJid} body=${msg.body.slice(0, 60)}`
       );
+      let media: { mediaUrl?: string; mediaType?: WhatsAppMessage["mediaType"] } = {};
       try {
-        await enqueueInbound(businessId, msg);
+        media = await resolveInboundMedia(businessId, client, msg, raw);
+      } catch (err) {
+        console.error(`[whatsapp] inbound media save failed business=${businessId}:`, err);
+      }
+      try {
+        await enqueueInbound(businessId, msg, media);
       } catch (err) {
         console.error(`[whatsapp] queue failed business=${businessId}, direct fallback:`, err);
         try {
-          await deliverBotReplies(businessId, client, msg);
+          await deliverBotReplies(businessId, client, msg, media);
         } catch (directErr) {
           console.error(`[whatsapp] direct fallback failed business=${businessId}:`, directErr);
         }
