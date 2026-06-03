@@ -553,7 +553,7 @@ export class WhatsAppClient extends EventEmitter {
       else if (mediaUrl.includes(".webp")) mimetype = "image/webp";
     }
     if (mimetype === "image/webp") {
-      buffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+      buffer = Buffer.from(await sharp(buffer).jpeg({ quality: 90 }).toBuffer());
       mimetype = "image/jpeg";
     }
     return { buffer, mimetype };
