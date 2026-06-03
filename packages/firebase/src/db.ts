@@ -773,12 +773,16 @@ export async function listDueScheduledStatuses(limit = 25): Promise<ScheduledSta
     .collectionGroup("scheduledStatuses")
     .where("status", "==", "scheduled")
     .where("scheduledAt", "<=", nowIso())
+    .orderBy("scheduledAt", "asc")
     .limit(limit)
     .get();
-  return snap.docs.map((d) => {
+  const rows = snap.docs.map((d) => {
     const businessId = d.ref.parent.parent?.id ?? "";
     return { id: d.id, businessId, ...d.data() } as ScheduledStatus;
   });
+  return rows.sort(
+    (a, b) => a.scheduledAt.localeCompare(b.scheduledAt) || a.createdAt.localeCompare(b.createdAt)
+  );
 }
 
 export async function claimScheduledStatus(
