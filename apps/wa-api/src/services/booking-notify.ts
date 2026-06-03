@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import type { Appointment, Business } from "@flowdesk/firebase";
 import { getBusinessVocabulary } from "@flowdesk/shared";
 import { waManager, isWhatsAppRuntime } from "../wa-manager.js";
-import { createMessage, upsertConversation } from "@flowdesk/firebase";
+import { createMessage, getConversation, upsertConversation } from "@flowdesk/firebase";
 
 export async function notifyBookingAccepted(
   business: Pick<Business, "id" | "name" | "type">,
@@ -23,8 +23,17 @@ export async function notifyBookingAccepted(
     `🔖 ${apt.id.slice(0, 8)}`;
 
   try {
-    const convId = apt.conversationId ?? (await upsertConversation(business.id, apt.customerPhone)).id;
-    await client.sendText(apt.customerPhone, text);
+    let convId = apt.conversationId;
+    let dest = apt.customerPhone;
+    if (convId) {
+      const conv = await getConversation(business.id, convId);
+      if (conv) dest = conv.replyJid?.trim() || conv.customerPhone || dest;
+    } else {
+      const conv = await upsertConversation(business.id, apt.customerPhone);
+      convId = conv.id;
+      dest = conv.replyJid?.trim() || conv.customerPhone;
+    }
+    await client.sendText(dest, text);
     await createMessage(business.id, convId, { role: "IA", content: text });
   } catch (err) {
     console.warn("[booking-notify] failed", business.id, apt.id, err);

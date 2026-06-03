@@ -40,16 +40,35 @@ export function validateChatUpload(mimetype: string, size: number): ChatMediaTyp
   throw new Error("Use imagem (JPEG, PNG, WebP), vídeo MP4 ou áudio (OGG, MP3, M4A).");
 }
 
-function extFor(mimetype: string, mediaType: ChatMediaType): string {
+function sniffAudioExt(buffer: Buffer, mimetype: string): string {
+  if (buffer.length >= 4 && buffer[0] === 0x4f && buffer[1] === 0x67 && buffer[2] === 0x67 && buffer[3] === 0x53) {
+    return "ogg";
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer[4] === 0x66 &&
+    buffer[5] === 0x74 &&
+    buffer[6] === 0x79 &&
+    buffer[7] === 0x70
+  ) {
+    return "m4a";
+  }
+  if (buffer.length >= 3 && buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) return "mp3";
+  const mt = mimetype.toLowerCase();
+  if (mt.includes("mpeg") || mt.includes("mp3")) return "mp3";
+  if (mt.includes("mp4") || mt.includes("m4a") || mt.includes("aac")) return "m4a";
+  return "ogg";
+}
+
+function extFor(mimetype: string, mediaType: ChatMediaType, buffer: Buffer): string {
   if (mediaType === "image") {
     if (mimetype === "image/png") return "png";
     if (mimetype === "image/webp") return "webp";
     return "jpg";
   }
   if (mediaType === "video") return "mp4";
-  if (mimetype.includes("mpeg")) return "mp3";
-  if (mimetype.includes("mp4")) return "m4a";
-  return "ogg";
+  if (mediaType === "audio") return sniffAudioExt(buffer, mimetype);
+  return "bin";
 }
 
 export async function saveChatMedia(
@@ -62,7 +81,7 @@ export async function saveChatMedia(
   const root = chatMediaRoot();
   const dir = path.join(root, businessId);
   fs.mkdirSync(dir, { recursive: true });
-  const fileName = `${randomUUID()}.${extFor(mimetype, kind)}`;
+  const fileName = `${randomUUID()}.${extFor(mimetype, kind, buffer)}`;
   fs.writeFileSync(path.join(dir, fileName), buffer);
   return { mediaUrl: publicChatMediaUrl(businessId, fileName), mediaType: kind };
 }

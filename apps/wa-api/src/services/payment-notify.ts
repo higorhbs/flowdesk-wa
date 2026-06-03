@@ -1,4 +1,4 @@
-import type { Payment } from "@flowdesk/firebase";
+import { upsertConversation, type Payment } from "@flowdesk/firebase";
 import { formatCurrency } from "@flowdesk/shared";
 import { waManager, isWhatsAppRuntime } from "../wa-manager.js";
 
@@ -14,7 +14,9 @@ export async function notifyPaymentReceived(payment: Payment): Promise<void> {
     `Obrigado! 🙏`;
 
   try {
-    await client.sendText(payment.customerPhone, text);
+    const conv = await upsertConversation(payment.businessId, payment.customerPhone);
+    const dest = conv.replyJid?.trim() || payment.customerPhone;
+    await client.sendText(dest, text);
   } catch (err) {
     console.error(`[payment-notify] failed for ${payment.businessId}:`, err);
   }

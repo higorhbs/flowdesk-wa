@@ -11,7 +11,12 @@ import {
 import { requireAuth } from "../middleware/auth";
 import type { WhatsAppClient } from "@flowdesk/whatsapp-client";
 import { isWhatsAppRuntime, waManager } from "../wa-manager.js";
-import { ensureWhatsAppClient, hasStoredSession, resolveWhatsAppClient } from "../wa-lifecycle.js";
+import {
+  ensureWhatsAppClient,
+  hasStoredSession,
+  resolveWhatsAppClient,
+  teardownWhatsAppSession,
+} from "../wa-lifecycle.js";
 import { saveStatusMedia } from "../status-media.js";
 import { saveChatMedia } from "../chat-media.js";
 
@@ -201,12 +206,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     const business = await getBusiness(id, req.tenantId);
     if (!business) return reply.status(404).send({ error: "Negócio não encontrado" });
 
-    const client = waManager.get(id);
-    if (client) {
-      await client.logout();
-      waManager.remove(id);
-      await setBusinessConnected(id, false);
-    }
+    await teardownWhatsAppSession(id);
     return { status: "disconnected" };
   });
 

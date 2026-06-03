@@ -18,6 +18,7 @@ export interface ReminderJob {
   appointmentId: string;
   businessId: string;
   customerPhone: string;
+  replyJid?: string;
   message: string;
 }
 
@@ -107,13 +108,14 @@ export function startReminderWorker(waManager: WhatsAppManager) {
   const worker = new Worker<ReminderJob>(
     "reminders",
     async (job) => {
-      const { businessId, customerPhone, message } = job.data;
+      const { businessId, customerPhone, replyJid, message } = job.data;
       if (!sessionsRoot) return;
       const client = await resolveWhatsAppClient(waManager, sessionsRoot, businessId, {
         waitMs: 5_000,
       });
       if (!client) return;
-      await client.sendText(customerPhone, message);
+      const dest = replyJid?.trim() || customerPhone;
+      await client.sendText(dest, message);
     },
     { connection: getRedisConnection() }
   );

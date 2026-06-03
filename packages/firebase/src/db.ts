@@ -558,7 +558,9 @@ export async function upsertConversation(
       lastMessageAt: ts,
       customerKey: key,
     };
-    if (dest.includes("@")) patch.replyJid = dest;
+    const prevReply = String(existing.data().replyJid ?? "").trim();
+    if (dest.includes("@lid")) patch.replyJid = dest;
+    else if (dest.includes("@") && !prevReply.includes("@lid")) patch.replyJid = dest;
     await existing.ref.update(patch);
     return { id: existing.id, businessId, ...existing.data(), ...patch } as Conversation;
   }

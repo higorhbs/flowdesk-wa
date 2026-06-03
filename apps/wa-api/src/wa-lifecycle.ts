@@ -206,11 +206,12 @@ export async function teardownWhatsAppSession(businessId: string) {
       if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
     }
     waManager.remove(businessId);
-    return;
+  } else {
+    const sessionDir = path.join(sessionsRoot, businessId);
+    if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
   }
 
-  const sessionDir = path.join(sessionsRoot, businessId);
-  if (fs.existsSync(sessionDir)) fs.rmSync(sessionDir, { recursive: true, force: true });
+  await setBusinessConnected(businessId, false);
 }
 
 export async function restoreWhatsAppSessions(

@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
@@ -52,10 +53,28 @@ export async function buildApp(): Promise<FastifyInstance> {
     prefix: "/status-media/",
     decorateReply: false,
   });
+  const chatMediaMime: Record<string, string> = {
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+  };
   await app.register(fastifyStatic, {
     root: chatMediaRoot(),
     prefix: "/chat-media/",
     decorateReply: false,
+    setHeaders: (res, filePath) => {
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = chatMediaMime[ext];
+      if (mime) res.setHeader("Content-Type", mime);
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    },
   });
 
   app.get("/health", () => ({
