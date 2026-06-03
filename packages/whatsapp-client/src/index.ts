@@ -266,6 +266,9 @@ export class WhatsAppClient extends EventEmitter {
       for (const msg of messages) {
         if (msg.key.fromMe && msg.message && msg.key.id) {
           this.messageStore.set(messageStoreKey(msg.key), msg.message);
+          if (isJidStatusBroadcast(msg.key.remoteJid ?? "")) {
+            console.log(`[wa:${this.businessId}] status_upsert id=${msg.key.id}`);
+          }
           continue;
         }
         this.tryEmitInbound(msg);
@@ -556,6 +559,16 @@ export class WhatsAppClient extends EventEmitter {
       buffer = Buffer.from(await sharp(buffer).jpeg({ quality: 90 }).toBuffer());
       mimetype = "image/jpeg";
     }
+    const meta = await sharp(buffer).metadata();
+    if ((meta.width ?? 0) > 1080 || mimetype === "image/png") {
+      buffer = Buffer.from(
+        await sharp(buffer)
+          .resize({ width: 1080, withoutEnlargement: true })
+          .jpeg({ quality: 88 })
+          .toBuffer()
+      );
+      mimetype = "image/jpeg";
+    }
     return { buffer, mimetype };
   }
 
@@ -585,13 +598,15 @@ export class WhatsAppClient extends EventEmitter {
         ? { video: buffer, mimetype, caption: opts.caption }
         : { image: buffer, mimetype, caption: opts.caption };
 
+    await this.ensurePreKeys();
     const result = await this.sock.sendMessage("status@broadcast", content, {
       broadcast: true,
       statusJidList,
       mediaUploadTimeoutMs: 180_000,
     });
+    this.stashSentMessage(result);
 
-    await new Promise((r) => setTimeout(r, 5_000));
+    await new Promise((r) => setTimeout(r, 8_000));
     return result?.key?.id ?? undefined;
   }
 
