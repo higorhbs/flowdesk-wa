@@ -24,6 +24,7 @@ import pino from "pino";
 import { toDataURL } from "qrcode";
 import path from "path";
 import fs from "fs";
+import sharp from "sharp";
 import EventEmitter from "events";
 
 export type WhatsAppMediaType = "image" | "video" | "audio";
@@ -540,16 +541,22 @@ export class WhatsAppClient extends EventEmitter {
     if (!res.ok) {
       throw new Error(`Mídia inacessível para o WhatsApp (${res.status}). Confira a URL pública.`);
     }
-    const buffer = Buffer.from(await res.arrayBuffer());
+    let buffer = Buffer.from(await res.arrayBuffer());
     if (!buffer.length) throw new Error("Arquivo de mídia vazio.");
     const headerType = res.headers.get("content-type")?.split(";")[0]?.trim();
     if (mediaType === "video") {
       return { buffer, mimetype: headerType || "video/mp4" };
     }
-    if (headerType?.startsWith("image/")) return { buffer, mimetype: headerType };
-    if (mediaUrl.includes(".png")) return { buffer, mimetype: "image/png" };
-    if (mediaUrl.includes(".webp")) return { buffer, mimetype: "image/webp" };
-    return { buffer, mimetype: "image/jpeg" };
+    let mimetype = headerType?.startsWith("image/") ? headerType : "image/jpeg";
+    if (!headerType?.startsWith("image/")) {
+      if (mediaUrl.includes(".png")) mimetype = "image/png";
+      else if (mediaUrl.includes(".webp")) mimetype = "image/webp";
+    }
+    if (mimetype === "image/webp") {
+      buffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+      mimetype = "image/jpeg";
+    }
+    return { buffer, mimetype };
   }
 
   async publishStatus(opts: {
@@ -584,8 +591,8 @@ export class WhatsAppClient extends EventEmitter {
       mediaUploadTimeoutMs: 180_000,
     });
 
-    await new Promise((r) => setTimeout(r, 3_000));
-    return result?.key.id ?? undefined;
+    await new Promise((r) => setTimeout(r, 5_000));
+    return result?.key?.id ?? undefined;
   }
 
   async logout() {

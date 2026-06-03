@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import sharp from "sharp";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime"]);
@@ -32,24 +33,35 @@ export function validateStatusUpload(mimetype: string, size: number) {
   return isVideo ? ("video" as const) : ("image" as const);
 }
 
+async function normalizeStatusImage(
+  buffer: Buffer,
+  mimetype: string
+): Promise<{ buffer: Buffer; mimetype: string; ext: string }> {
+  if (mimetype === "image/webp") {
+    const out = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+    return { buffer: out, mimetype: "image/jpeg", ext: "jpg" };
+  }
+  if (mimetype === "image/png") return { buffer, mimetype, ext: "png" };
+  return { buffer, mimetype: mimetype === "image/jpeg" ? mimetype : "image/jpeg", ext: "jpg" };
+}
+
 export async function saveStatusMedia(
   businessId: string,
   buffer: Buffer,
   mimetype: string
 ): Promise<{ mediaUrl: string; mediaType: "image" | "video" }> {
   const mediaType = validateStatusUpload(mimetype, buffer.length);
-  const ext =
-    mimetype === "image/png"
-      ? "png"
-      : mimetype === "image/webp"
-        ? "webp"
-        : mimetype.startsWith("video/")
-          ? "mp4"
-          : "jpg";
   const root = statusMediaRoot();
   const dir = path.join(root, businessId);
   fs.mkdirSync(dir, { recursive: true });
+  let ext = "mp4";
+  let out = buffer;
+  if (mediaType === "image") {
+    const normalized = await normalizeStatusImage(buffer, mimetype);
+    out = normalized.buffer;
+    ext = normalized.ext;
+  }
   const fileName = `${randomUUID()}.${ext}`;
-  fs.writeFileSync(path.join(dir, fileName), buffer);
+  fs.writeFileSync(path.join(dir, fileName), out);
   return { mediaUrl: publicStatusMediaUrl(businessId, fileName), mediaType };
 }

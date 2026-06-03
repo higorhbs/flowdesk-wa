@@ -9,6 +9,7 @@ import type { WhatsAppManager } from "@flowdesk/whatsapp-client";
 import { resolveWhatsAppClient } from "../wa-lifecycle.js";
 
 const TICK_MS = 30_000;
+const GAP_BETWEEN_POSTS_MS = 8_000;
 
 async function publishOne(waManager: WhatsAppManager, post: { businessId: string; id: string }) {
   const claimed = await claimScheduledStatus(post.businessId, post.id);
@@ -55,11 +56,19 @@ async function publishOne(waManager: WhatsAppManager, post: { businessId: string
 }
 
 export function startStatusScheduler(waManager: WhatsAppManager) {
+  let running = false;
+
   const run = async () => {
-    const due = await listDueScheduledStatuses();
-    for (const post of due) {
-      await publishOne(waManager, { businessId: post.businessId, id: post.id });
-      await new Promise((r) => setTimeout(r, 2_000));
+    if (running) return;
+    running = true;
+    try {
+      const due = await listDueScheduledStatuses();
+      for (const post of due) {
+        await publishOne(waManager, { businessId: post.businessId, id: post.id });
+        await new Promise((r) => setTimeout(r, GAP_BETWEEN_POSTS_MS));
+      }
+    } finally {
+      running = false;
     }
   };
 
