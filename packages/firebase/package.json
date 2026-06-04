@@ -21,6 +21,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@flowdesk/shared": "workspace:*",
     "@opentelemetry/api": "^1.9.0",
     "firebase": "^11.6.0",
     "firebase-admin": "^13.4.0"
