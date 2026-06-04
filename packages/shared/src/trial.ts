@@ -1,4 +1,4 @@
-export const STARTER_TRIAL_DAYS = 14;
+export const STARTER_TRIAL_DAYS = 7;
 
 export type TrialTenantLike = {
   plan: string;

@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import type { Plan, PlanStatus, Tenant } from "./types.js";
+import { STARTER_TRIAL_DAYS } from "@flowdesk/shared";
 import { getClientDb } from "./client.js";
 
 function nowIso() {
@@ -17,7 +18,7 @@ export async function ensureClientTenant(
   }
   const ts = nowIso();
   const trialEnds = new Date();
-  trialEnds.setDate(trialEnds.getDate() + 14);
+  trialEnds.setDate(trialEnds.getDate() + STARTER_TRIAL_DAYS);
   const tenant: Tenant = {
     id,
     name: data.name,

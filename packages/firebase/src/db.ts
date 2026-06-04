@@ -20,6 +20,7 @@ import type {
 import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 import { getDb, newId, nowIso } from "./admin.js";
+import { STARTER_TRIAL_DAYS } from "@flowdesk/shared";
 
 const tenants = () => getDb().collection("tenants");
 const businesses = () => getDb().collection("businesses");
@@ -132,7 +133,7 @@ export async function createTenant(
 ): Promise<Tenant> {
   const ts = nowIso();
   const trialEnds = new Date();
-  trialEnds.setDate(trialEnds.getDate() + 14);
+  trialEnds.setDate(trialEnds.getDate() + STARTER_TRIAL_DAYS);
   const tenant: Tenant = {
     id,
     name: data.name,

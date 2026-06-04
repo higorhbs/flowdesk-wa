@@ -135,6 +135,11 @@ function socketIsOpen(sock: WASocket | null): boolean {
   return ws.readyState === 1;
 }
 
+function linkedDeviceBrowser(): [string, string, string] {
+  const name = process.env.WA_LINKED_DEVICE_NAME?.trim() || "FlowDesk";
+  return [name, "Chrome", "120.0.0"];
+}
+
 export class WhatsAppClient extends EventEmitter {
   private sock: WASocket | null = null;
   private boundSock: WASocket | null = null;
@@ -364,6 +369,7 @@ export class WhatsAppClient extends EventEmitter {
       this.sock = makeWASocket({
         version,
         logger: this.logger as any,
+        browser: linkedDeviceBrowser(),
         auth: {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, this.logger as any),
