@@ -17,7 +17,7 @@ git add -A && git commit -m "deploy: api hono na vm" && git push origin main
 
 Aguarde: https://github.com/higorhbs/flowdesk-wa/actions → **Build FlowDesk API Docker image** verde.
 
-> O workflow clona `higorhbs/FlowDesk` e builda `Dockerfile.backend`.
+> O workflow clona `higorhbs/ZapFlow` (monorepo FlowDesk) e builda `Dockerfile.backend`.
 
 ---
 
