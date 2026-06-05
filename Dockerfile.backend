@@ -44,9 +44,6 @@ RUN apk add --no-cache su-exec \
   && mkdir -p /app/.secrets \
   && chown -R node:node /app/.secrets
 
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
+USER node
 EXPOSE 3001
-ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "apps/backend/src/index.js"]
