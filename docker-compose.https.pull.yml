@@ -14,7 +14,7 @@ services:
         condition: service_healthy
 
   api:
-    image: ${API_IMAGE:-ghcr.io/higorhbs/flowdesk-api:latest}
+    image: ${API_IMAGE:-ghcr.io/higorhbs/flowdesk-backend:latest}
     restart: unless-stopped
     init: true
     expose:

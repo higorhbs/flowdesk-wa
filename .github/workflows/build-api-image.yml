@@ -3,12 +3,6 @@ name: Build FlowDesk API Docker image
 on:
   push:
     branches: [main]
-    paths:
-      - "Dockerfile.backend"
-      - "docker-compose*.yml"
-      - "Caddyfile.example"
-      - "scripts/**"
-      - ".github/workflows/build-api-image.yml"
   workflow_dispatch:
 
 permissions:
@@ -17,7 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: flowdesk-api
+  IMAGE_NAME: flowdesk-backend
 
 jobs:
   build:

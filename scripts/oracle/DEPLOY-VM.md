@@ -1,7 +1,7 @@
 # Deploy flowdesk-wa na VM Oracle — API Hono completa
 
 Repositório: https://github.com/higorhbs/flowdesk-wa  
-Imagem Docker: `ghcr.io/higorhbs/flowdesk-api:latest`  
+Imagem Docker: `ghcr.io/higorhbs/flowdesk-backend:latest`  
 VM: `ubuntu@163.176.132.231` · pasta `~/flowdesk-wa`
 
 A VM expõe a **API completa do FlowDesk** (Hono): `/auth/google`, `/register`, `/businesses`, `/chat/whatsapp`, `/stories/whatsapp`, WhatsApp workers (`ENABLE_WORKERS=true`).
@@ -41,7 +41,7 @@ cd ~/flowdesk-wa
 git pull origin main
 cp Caddyfile.example Caddyfile   # primeira vez
 echo "PAT_read_packages" | docker login ghcr.io -u higorhbs --password-stdin
-export API_IMAGE=ghcr.io/higorhbs/flowdesk-api:latest
+export API_IMAGE=ghcr.io/higorhbs/flowdesk-backend:latest
 docker compose -f docker-compose.https.pull.yml pull
 docker compose -f docker-compose.https.pull.yml up -d
 ```

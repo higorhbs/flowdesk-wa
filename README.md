@@ -35,7 +35,7 @@ pnpm send:vm-env
 
 Na VM: ver `scripts/oracle/DEPLOY-VM.md`
 
-Imagem: `ghcr.io/higorhbs/flowdesk-api:latest`
+Imagem: `ghcr.io/higorhbs/flowdesk-backend:latest`
 
 ## Front FlowDesk
 
