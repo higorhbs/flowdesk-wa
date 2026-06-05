@@ -1,118 +1,95 @@
-# Deploy flowdesk-wa na VM Oracle — comandos prontos
+# Deploy flowdesk-wa na VM Oracle — API Hono completa
 
 Repositório: https://github.com/higorhbs/flowdesk-wa  
-Imagem Docker: `ghcr.io/higorhbs/flowdesk-wa:latest`  
+Imagem Docker: `ghcr.io/higorhbs/flowdesk-api:latest`  
 VM: `ubuntu@163.176.132.231` · pasta `~/flowdesk-wa`
 
+A VM expõe a **API completa do FlowDesk** (Hono): `/auth/google`, `/register`, `/businesses`, `/chat/whatsapp`, `/stories/whatsapp`, WhatsApp workers (`ENABLE_WORKERS=true`).
+
 ---
 
-## 1. No Mac — enviar código e gerar imagem no GitHub
+## 1. No Mac — push flowdesk-wa + FlowDesk
 
 ```bash
 cd ~/flowdesk-wa
-git add -A
-git commit -m "deploy: ajustes vm"
-git push origin main
+git add -A && git commit -m "deploy: api hono na vm" && git push origin main
 ```
 
-Abra: https://github.com/higorhbs/flowdesk-wa/actions  
-Aguarde o workflow **Build WA API Docker image** ficar verde.
+Aguarde: https://github.com/higorhbs/flowdesk-wa/actions → **Build FlowDesk API Docker image** verde.
 
-> Primeira vez: em https://github.com/users/higorhbs/packages → pacote `flowdesk-wa` → **Package settings** → mude para **Public** (ou use PAT com `read:packages` no passo 3).
+> O workflow clona `higorhbs/FlowDesk` e builda `Dockerfile.backend`.
 
 ---
 
-## 2. No Mac — gerar `.env` e copiar para a VM
+## 2. No Mac — env para VM
 
 ```bash
 cd ~/flowdesk-wa
-cp .env.example .env
+pnpm setup:vm-env
 pnpm send:vm-env
 ```
 
-Credencial: coloque em `flowdesk-wa/.secrets/firebase-adminsdk.json` ou use a de `~/FlowDesk/.secrets/` (o script acha sozinho).
+Usa `~/FlowDesk/apps/backend/.env` como fonte (FIREBASE_WEB_API_KEY, Stripe, etc.).
 
 ---
 
-## 3. Na VM — login GHCR, pull e subir (sem build local)
+## 3. Na VM — pull e subir
 
 ```bash
 ssh -i ~/Documents/ssh-key-2026-05-28.key ubuntu@163.176.132.231
-```
-
-Primeira vez na VM (clone):
-
-```bash
-cd ~
-git clone https://github.com/higorhbs/flowdesk-wa.git
-cd ~/flowdesk-wa
-cp .env.example .env
-mkdir -p .secrets
-```
-
-Atualizar código:
-
-```bash
 cd ~/flowdesk-wa
 git pull origin main
-```
-
-```bash
-echo "COLE_SEU_GITHUB_PAT_COM_read:packages" | docker login ghcr.io -u higorhbs --password-stdin
-```
-
-```bash
-export WA_API_IMAGE=ghcr.io/higorhbs/flowdesk-wa:latest
+cp Caddyfile.example Caddyfile   # primeira vez
+echo "PAT_read_packages" | docker login ghcr.io -u higorhbs --password-stdin
+export API_IMAGE=ghcr.io/higorhbs/flowdesk-api:latest
 docker compose -f docker-compose.https.pull.yml pull
 docker compose -f docker-compose.https.pull.yml up -d
 ```
 
+---
+
+## 4. Validar
+
 ```bash
-docker compose -f docker-compose.https.pull.yml ps
 curl -sS https://zapflow.duckdns.org/health
-curl -sS https://zapflow.duckdns.org/health/billing
+curl -sS -X POST https://zapflow.duckdns.org/auth/google \
+  -H 'Content-Type: application/json' -d '{"accessToken":"test"}'
 ```
+
+Esperado no segundo: **400** ou **401** (token inválido) — **não** 404.
 
 ---
 
-## 4. Se ainda quiser build na VM (lento — precisa swap)
-
-```bash
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-free -h
-```
+## 5. Build local (Mac, com FlowDesk ao lado)
 
 ```bash
 cd ~/flowdesk-wa
-docker compose -f docker-compose.https.yml build --build-arg NODE_OPTIONS=--max-old-space-size=256 wa-api
+docker compose -f docker-compose.https.yml build api
 docker compose -f docker-compose.https.yml up -d
 ```
 
+Requer `~/FlowDesk` cloneado ao lado de `~/flowdesk-wa`.
+
 ---
 
-## 5. Atualizar depois de novo push no GitHub
+## 6. Logs
 
 ```bash
-cd ~/flowdesk-wa
-git pull origin main
-export WA_API_IMAGE=ghcr.io/higorhbs/flowdesk-wa:latest
-docker compose -f docker-compose.https.pull.yml pull
-docker compose -f docker-compose.https.pull.yml up -d
+docker compose -f docker-compose.https.pull.yml logs -f api --tail 100
 ```
 
 ---
 
-## 6. Logs e reinício
+## Front (Firebase Hosting)
 
 ```bash
-cd ~/flowdesk-wa
-docker compose -f docker-compose.https.pull.yml logs -f wa-api --tail 100
+cd ~/FlowDesk
+pnpm setup:billing-env
+pnpm deploy:hosting
 ```
 
-```bash
-cd ~/flowdesk-wa
-docker compose -f docker-compose.https.pull.yml restart wa-api
+`.env.production` deve ter:
+```
+NEXT_PUBLIC_API_URL=https://zapflow.duckdns.org
+NEXT_PUBLIC_WA_API_URL=https://zapflow.duckdns.org
 ```

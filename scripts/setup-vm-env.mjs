@@ -18,13 +18,14 @@ function loadEnv(filePath) {
   return out;
 }
 
-const sources = [
-  resolve(root, ".env"),
-  resolve(root, "../FlowDesk/.env"),
-].filter(existsSync);
+const flowdeskEnv = resolve(root, "../FlowDesk/.env");
+const flowdeskBackendEnv = resolve(root, "../FlowDesk/apps/backend/.env");
+const localEnv = resolve(root, ".env");
+
+const sources = [flowdeskBackendEnv, flowdeskEnv, localEnv].filter(existsSync);
 
 if (sources.length === 0) {
-  console.error("\n❌ Crie .env nesta pasta (cp .env.example .env) ou tenha ~/FlowDesk/.env\n");
+  console.error("\n❌ Crie .env aqui ou tenha ~/FlowDesk/apps/backend/.env\n");
   process.exit(1);
 }
 
@@ -33,11 +34,13 @@ const pick = (key, fallback = "") => env[key]?.trim() || fallback;
 
 const waHost = (
   pick("WA_API_PUBLIC_URL") ||
-  pick("WA_API_DOMAIN") ||
+  pick("API_PUBLIC_URL") ||
   pick("API_DOMAIN", "zapflow.duckdns.org")
 )
   .replace(/^https?:\/\//, "")
   .replace(/\/$/, "");
+
+const publicApi = `https://${waHost}`;
 
 const hostingOrigins = [
   "https://zapflow-higor-2026.web.app",
@@ -55,21 +58,26 @@ const corsOrigin = [...new Set([...hostingOrigins, ...corsFromEnv.filter((o) => 
 const webOrigin = pick("WEB_ORIGIN", "https://flowdesk.ia.br");
 
 const lines = [
-  "# Gerado por pnpm setup:vm-env — flowdesk-wa",
-  `# Webhook Stripe: https://${waHost}/webhooks/stripe`,
+  "# Gerado por pnpm setup:vm-env — flowdesk-wa (API Hono FlowDesk)",
+  `# Webhook Stripe: ${publicApi}/webhooks/stripe`,
+  `# Login Google: POST ${publicApi}/auth/google`,
   "",
-  "API_PORT=3001",
-  `WA_API_PUBLIC_URL=https://${waHost}`,
+  "PORT=3001",
+  "ENABLE_WORKERS=true",
+  `API_PUBLIC_URL=${publicApi}`,
+  `WA_API_PUBLIC_URL=${publicApi}`,
   `WEB_ORIGIN=${webOrigin}`,
   `CORS_ORIGIN=${corsOrigin}`,
   "",
+  `FIREBASE_WEB_API_KEY=${pick("FIREBASE_WEB_API_KEY", pick("NEXT_PUBLIC_FIREBASE_API_KEY"))}`,
   `FIREBASE_PROJECT_ID=${pick("FIREBASE_PROJECT_ID", "zapflow-higor-2026")}`,
   `FIREBASE_CLIENT_EMAIL=${pick("FIREBASE_CLIENT_EMAIL", "firebase-adminsdk-fbsvc@zapflow-higor-2026.iam.gserviceaccount.com")}`,
+  `FIREBASE_STORAGE_BUCKET=${pick("FIREBASE_STORAGE_BUCKET", pick("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET", "zapflow-higor-2026.firebasestorage.app"))}`,
   "GOOGLE_APPLICATION_CREDENTIALS=/app/.secrets/firebase-adminsdk.json",
   "",
-  "REDIS_URL=redis://redis:6379",
-  "WA_SESSION_PATH=/app/sessions",
-  "WA_STATUS_MEDIA_PATH=/app/status-media",
+  `INTERNAL_NOTIFY_SECRET=${pick("INTERNAL_NOTIFY_SECRET", "change-me-internal-secret")}`,
+  `LOG_LEVEL=${pick("LOG_LEVEL", "info")}`,
+  `PRIVACY_RETENTION_INTERVAL_HOURS=${pick("PRIVACY_RETENTION_INTERVAL_HOURS", "24")}`,
   "",
   `STRIPE_SECRET_KEY=${pick("STRIPE_SECRET_KEY")}`,
   `STRIPE_WEBHOOK_SECRET=${pick("STRIPE_WEBHOOK_SECRET")}`,
@@ -80,6 +88,7 @@ const lines = [
   `ASAAS_API_KEY=${pick("ASAAS_API_KEY")}`,
   `ASAAS_BASE_URL=${pick("ASAAS_BASE_URL", "https://api.asaas.com/api/v3")}`,
   `ASAAS_WEBHOOK_TOKEN=${pick("ASAAS_WEBHOOK_TOKEN")}`,
+  `ASAAS_DEFAULT_CPF_CNPJ=${pick("ASAAS_DEFAULT_CPF_CNPJ")}`,
   "",
 ];
 
@@ -88,10 +97,11 @@ writeFileSync(vmPath, `${lines.join("\n")}\n`);
 
 console.log(`\n✅ ${vmPath}`);
 console.log(`   Fonte: ${sources[sources.length - 1]}`);
-console.log(`   API: https://${waHost}`);
+console.log(`   API: ${publicApi}`);
+if (!pick("FIREBASE_WEB_API_KEY", pick("NEXT_PUBLIC_FIREBASE_API_KEY"))) {
+  console.warn("\n⚠️  FIREBASE_WEB_API_KEY vazio — login Google/e-mail falha");
+}
 if (!pick("STRIPE_SECRET_KEY")) {
-  console.warn("\n⚠️  STRIPE_SECRET_KEY vazio — preencha .env antes do deploy");
+  console.warn("⚠️  STRIPE_SECRET_KEY vazio — preencha .env antes do deploy");
 }
-if (!pick("STRIPE_WEBHOOK_SECRET")) {
-  console.warn("⚠️  STRIPE_WEBHOOK_SECRET vazio — crie webhook no Stripe depois");
-}
+console.log("\nPróximo: pnpm send:vm-env → na VM: docker compose -f docker-compose.https.pull.yml up -d\n");

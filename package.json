@@ -8,7 +8,9 @@
     "build": "pnpm --filter @flowdesk/wa-api build",
     "start": "pnpm --filter @flowdesk/wa-api start",
     "setup:vm-env": "node scripts/setup-vm-env.mjs",
-    "send:vm-env": "bash scripts/send-vm-env.sh"
+    "send:vm-env": "bash scripts/send-vm-env.sh",
+    "compose:up": "docker compose -f docker-compose.https.pull.yml up -d",
+    "compose:pull": "docker compose -f docker-compose.https.pull.yml pull"
   },
   "engines": {
     "node": ">=20"

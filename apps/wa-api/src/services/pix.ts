@@ -57,8 +57,16 @@ function normalizeBrPhone(phone: string): string {
   return digits;
 }
 
-function defaultCpfCnpj(): string {
-  return optionalEnv("ASAAS_DEFAULT_CPF") ?? "24971563792";
+function resolveAsaasDefaultCpfCnpj(): string {
+  const raw =
+    optionalEnv("ASAAS_DEFAULT_CPF_CNPJ") ?? optionalEnv("ASAAS_DEFAULT_CPF");
+  const digits = raw?.replace(/\D/g, "") ?? "";
+  if (digits.length !== 11 && digits.length !== 14) {
+    throw new Error(
+      "Configure ASAAS_DEFAULT_CPF_CNPJ (CPF 11 ou CNPJ 14 dígitos) com o documento da conta Asaas da plataforma."
+    );
+  }
+  return digits;
 }
 
 export interface PixChargeInput {
@@ -84,7 +92,7 @@ export async function createPixCharge(
 ): Promise<PixChargeResult> {
   const client = asaasClient(creds);
   const mobilePhone = normalizeBrPhone(input.customerPhone);
-  const cpfCnpj = defaultCpfCnpj();
+  const cpfCnpj = resolveAsaasDefaultCpfCnpj();
   let customerId: string;
 
   const existing = await client.get("/customers", { params: { mobilePhone } });

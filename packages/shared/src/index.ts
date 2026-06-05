@@ -387,6 +387,7 @@ export const PLAN_PRICES = {
 } as const;
 
 export * from "./brand.js";
+export * from "./legal.js";
 export * from "./bot-menu.js";
 export * from "./business-vocabulary.js";
 export * from "./message-role.js";

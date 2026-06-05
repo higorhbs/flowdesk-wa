@@ -10,30 +10,15 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      wa-api:
+      api:
         condition: service_healthy
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  wa-api:
-    image: ${WA_API_IMAGE:-ghcr.io/higorhbs/flowdesk-wa:latest}
+  api:
+    image: ${API_IMAGE:-ghcr.io/higorhbs/flowdesk-api:latest}
     restart: unless-stopped
     init: true
     expose:
       - "3001"
-    depends_on:
-      redis:
-        condition: service_healthy
     healthcheck:
       test:
         [
@@ -45,21 +30,23 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 25s
+      start_period: 40s
     environment:
       NODE_ENV: production
-      API_PORT: 3001
-      REDIS_URL: redis://redis:6379
-      WA_SESSION_PATH: /app/sessions
-      WA_STATUS_MEDIA_PATH: /app/status-media
-      WA_CHAT_MEDIA_PATH: /app/chat-media
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/.secrets/firebase-adminsdk.json}
+      PORT: 3001
+      ENABLE_WORKERS: "true"
+      WEB_ORIGIN: ${WEB_ORIGIN:-https://flowdesk.ia.br}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-https://zapflow.duckdns.org}
+      WA_API_PUBLIC_URL: ${WA_API_PUBLIC_URL:-https://zapflow.duckdns.org}
+      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
-      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-      CORS_ORIGIN: ${CORS_ORIGIN}
-      WEB_ORIGIN: ${WEB_ORIGIN:-}
-      WA_API_PUBLIC_URL: ${WA_API_PUBLIC_URL:-https://zapflow.duckdns.org}
+      FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/.secrets/firebase-adminsdk.json}
+      INTERNAL_NOTIFY_SECRET: ${INTERNAL_NOTIFY_SECRET:-change-me-internal-secret}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PRIVACY_RETENTION_INTERVAL_HOURS: ${PRIVACY_RETENTION_INTERVAL_HOURS:-24}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
@@ -68,16 +55,10 @@ services:
       ASAAS_API_KEY: ${ASAAS_API_KEY:-}
       ASAAS_BASE_URL: ${ASAAS_BASE_URL:-}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
+      ASAAS_DEFAULT_CPF_CNPJ: ${ASAAS_DEFAULT_CPF_CNPJ:-}
     volumes:
-      - wa_sessions:/app/sessions
-      - wa_status_media:/app/status-media
-      - wa_chat_media:/app/chat-media
       - ${SECRETS_DIR:-./.secrets}:/app/.secrets:ro
 
 volumes:
-  redis_data:
-  wa_sessions:
-  wa_status_media:
-  wa_chat_media:
   caddy_data:
   caddy_config:

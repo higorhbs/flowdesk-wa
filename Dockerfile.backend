@@ -1,0 +1,52 @@
+FROM node:20-alpine AS builder
+ARG NODE_OPTIONS=--max-old-space-size=512
+ENV NODE_OPTIONS=${NODE_OPTIONS}
+ENV CI=true
+RUN corepack enable
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/backend/package.json apps/backend/
+COPY packages/firebase/package.json packages/firebase/
+COPY packages/shared/package.json packages/shared/
+COPY packages/whatsapp-client/package.json packages/whatsapp-client/
+COPY scripts/copy-backend-whatsapp-js.mjs scripts/copy-backend-whatsapp-js.mjs
+
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+COPY apps/backend apps/backend
+COPY packages/firebase packages/firebase
+COPY packages/shared packages/shared
+COPY packages/whatsapp-client packages/whatsapp-client
+
+RUN pnpm --filter @flowdesk/backend... run build
+
+FROM node:20-alpine AS runner
+RUN corepack enable
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/backend/package.json apps/backend/
+COPY packages/firebase/package.json packages/firebase/
+COPY packages/shared/package.json packages/shared/
+COPY packages/whatsapp-client/package.json packages/whatsapp-client/
+
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts && pnpm store prune
+
+COPY --from=builder /app/apps/backend/src apps/backend/src
+COPY --from=builder /app/apps/backend/dist apps/backend/dist
+COPY --from=builder /app/packages/firebase/dist packages/firebase/dist
+COPY --from=builder /app/packages/shared/dist packages/shared/dist
+COPY --from=builder /app/packages/whatsapp-client/dist packages/whatsapp-client/dist
+
+RUN apk add --no-cache su-exec \
+  && mkdir -p /app/.secrets \
+  && chown -R node:node /app/.secrets
+
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+EXPOSE 3001
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["node", "apps/backend/src/index.js"]

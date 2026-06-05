@@ -4,5 +4,5 @@
 
 zapflow.duckdns.org {
 	encode gzip
-	reverse_proxy wa-api:3001
+	reverse_proxy api:3001
 }
