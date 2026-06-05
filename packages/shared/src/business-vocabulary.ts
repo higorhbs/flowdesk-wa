@@ -1,12 +1,15 @@
 import { APP_DISPLAY_NAME } from "./brand.js";
 
-export type BusinessType =
-  | "BARBERSHOP"
-  | "SALON"
-  | "RESTAURANT"
-  | "DENTAL"
-  | "STORE"
-  | "OTHER";
+export const BUSINESS_TYPE_ORDER = [
+  "STORE",
+  "BARBERSHOP",
+  "SALON",
+  "RESTAURANT",
+  "DENTAL",
+  "OTHER",
+] as const;
+
+export type BusinessType = (typeof BUSINESS_TYPE_ORDER)[number];
 
 export interface BusinessVocabulary {
   typeLabel: string;
@@ -318,11 +321,11 @@ export function getIntentKeywordsForType(type?: string | null) {
 }
 
 export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  STORE: "Comércio local",
   BARBERSHOP: "Barbearia",
   SALON: "Salão / Manicure",
   RESTAURANT: "Restaurante",
   DENTAL: "Dentista / Clínica",
-  STORE: "Comércio local",
   OTHER: "Outro",
 };
 
