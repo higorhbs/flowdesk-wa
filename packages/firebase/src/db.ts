@@ -938,3 +938,27 @@ export async function getAnalytics(businessId: string) {
     },
   };
 }
+
+export async function listTenantBusinessIds(tenantId: string): Promise<string[]> {
+  const snap = await businesses().where("tenantId", "==", tenantId).get();
+  return snap.docs.map((d) => d.id);
+}
+
+export async function deleteTenantFirestoreData(tenantId: string): Promise<void> {
+  const db = getDb();
+  const businessSnap = await businesses().where("tenantId", "==", tenantId).get();
+  for (const doc of businessSnap.docs) {
+    await db.recursiveDelete(doc.ref);
+  }
+
+  const feedbackCol = db.collection("tenantCancellationFeedback");
+  while (true) {
+    const feedbackSnap = await feedbackCol.where("tenantId", "==", tenantId).limit(400).get();
+    if (feedbackSnap.empty) break;
+    const batch = db.batch();
+    for (const doc of feedbackSnap.docs) batch.delete(doc.ref);
+    await batch.commit();
+  }
+
+  await db.recursiveDelete(tenants().doc(tenantId));
+}
