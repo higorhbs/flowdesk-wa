@@ -6,6 +6,12 @@ export type MessageRole = "CUSTOMER" | "IA" | "HUMAN";
 export type AppointmentStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 export type PaymentStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
 
+export interface TenantMonthlyUsage {
+  month: string;
+  storiesPublished: number;
+  updatedAt: string;
+}
+
 export interface Tenant {
   id: string;
   name: string;

@@ -329,17 +329,38 @@ export type ScheduledStoryQuotaRow = {
   status: string;
 };
 
-export function countScheduledStoriesInMonth(
+export function monthKey(ref = new Date()): string {
+  const y = ref.getFullYear();
+  const m = String(ref.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+export function countReservedStoriesInMonth(
   rows: ScheduledStoryQuotaRow[],
   ref = new Date()
 ): number {
   const y = ref.getFullYear();
   const m = ref.getMonth();
   return rows.filter((row) => {
-    if (row.status === "cancelled") return false;
+    if (row.status !== "scheduled") return false;
     const d = new Date(row.scheduledAt);
     return d.getFullYear() === y && d.getMonth() === m;
   }).length;
+}
+
+export function storiesQuotaUsed(
+  publishedCount: number,
+  rows: ScheduledStoryQuotaRow[],
+  ref = new Date()
+): number {
+  return publishedCount + countReservedStoriesInMonth(rows, ref);
+}
+
+export function countScheduledStoriesInMonth(
+  rows: ScheduledStoryQuotaRow[],
+  ref = new Date()
+): number {
+  return storiesQuotaUsed(0, rows, ref);
 }
 
 export function assertScheduledStoriesQuota(

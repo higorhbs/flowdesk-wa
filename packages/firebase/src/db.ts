@@ -20,7 +20,7 @@ import type {
 import type { Query, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 import { getDb, newId, nowIso } from "./admin.js";
-import { STARTER_TRIAL_DAYS } from "@flowdesk/shared";
+import { STARTER_TRIAL_DAYS, monthKey } from "@flowdesk/shared";
 
 const tenants = () => getDb().collection("tenants");
 const businesses = () => getDb().collection("businesses");
@@ -99,6 +99,10 @@ function asaasIntegrationRef(businessId: string) {
 
 function scheduledStatusesCol(businessId: string) {
   return businessRef(businessId).collection("scheduledStatuses");
+}
+
+function tenantUsageRef(tenantId: string, month: string) {
+  return tenants().doc(tenantId).collection("usage").doc(month);
 }
 
 function phoneToJid(phone: string): string | null {
@@ -802,6 +806,15 @@ export async function claimScheduledStatus(
   });
 }
 
+export async function getTenantStoriesPublished(
+  tenantId: string,
+  ref = new Date()
+): Promise<number> {
+  const snap = await tenantUsageRef(tenantId, monthKey(ref)).get();
+  const n = snap.data()?.storiesPublished;
+  return typeof n === "number" && Number.isFinite(n) ? n : 0;
+}
+
 export async function finishScheduledStatus(
   businessId: string,
   id: string,
@@ -811,7 +824,37 @@ export async function finishScheduledStatus(
   const patch: Record<string, unknown> = { status: outcome.status, updatedAt: ts };
   if (outcome.status === "published") patch.publishedAt = ts;
   if (outcome.status === "failed") patch.error = outcome.error.slice(0, 500);
-  await scheduledStatusesCol(businessId).doc(id).update(patch);
+
+  const statusRef = scheduledStatusesCol(businessId).doc(id);
+  if (outcome.status !== "published") {
+    await statusRef.update(patch);
+    return;
+  }
+
+  const business = await getBusiness(businessId);
+  if (!business?.tenantId) {
+    await statusRef.update(patch);
+    return;
+  }
+
+  const usageRef = tenantUsageRef(business.tenantId, monthKey(new Date(ts)));
+  await getDb().runTransaction(async (tx) => {
+    const statusSnap = await tx.get(statusRef);
+    if (!statusSnap.exists) return;
+    const row = statusSnap.data() as ScheduledStatus;
+    if (row.status !== "publishing") return;
+
+    const usageSnap = await tx.get(usageRef);
+    const published = usageSnap.exists ? Number(usageSnap.data()?.storiesPublished) || 0 : 0;
+    const month = monthKey(new Date(ts));
+
+    tx.update(statusRef, patch);
+    tx.set(
+      usageRef,
+      { month, storiesPublished: published + 1, updatedAt: ts },
+      { merge: true }
+    );
+  });
 }
 
 export async function listStatusAudienceJids(businessId: string, max = 400): Promise<string[]> {
